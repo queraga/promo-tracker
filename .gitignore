@@ -1,0 +1,48 @@
+# dependencies
+node_modules/
+
+# environment
+.env
+.env.*
+!.env.example
+
+# build
+dist/
+build/
+
+# TypeScript
+*.tsbuildinfo
+
+# logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# tests / coverage
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# local database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Prisma local files
+prisma/dev.db
+prisma/dev.db-journal
+
+# temp
+tmp/
+temp/
+.cache/

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "bot": "tsx src/app/bot.ts",
     "test": "touch prisma/test.db && DATABASE_URL=file:./test.db prisma migrate deploy && DATABASE_URL=file:./test.db vitest run",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -12,10 +13,12 @@
   "devDependencies": {
     "@types/node": "^26.5.0",
     "prisma": "^6.19.3",
+    "tsx": "^4.23.13",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "@prisma/client": "^6.19.3"
+    "@prisma/client": "^6.19.3",
+    "grammy": "^1.46.0"
   }
 }

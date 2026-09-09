@@ -1,0 +1,52 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Promo {
+  id             String   @id @default(cuid())
+  lob            String
+  name           String
+  normalizedName String
+  startDate      DateTime
+  endDate        DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  partners PromoPartner[]
+
+  @@unique([lob, normalizedName, startDate, endDate])
+  @@index([startDate])
+  @@index([endDate])
+}
+
+model Partner {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  promos PromoPartner[]
+}
+
+model PromoPartner {
+  id               String   @id @default(cuid())
+  promoId          String
+  partnerId        String
+  rawEmailSubject  String
+  reportReceived   Boolean  @default(false)
+  reportReceivedAt DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  promo   Promo   @relation(fields: [promoId], references: [id], onDelete: Cascade)
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@unique([promoId, partnerId])
+  @@index([partnerId])
+  @@index([promoId])
+}

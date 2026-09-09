@@ -8,6 +8,9 @@ node_modules/
 
 # build
 dist/
+*.db
+*.db-journal
+.env
 build/
 
 # TypeScript

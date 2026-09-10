@@ -1,4 +1,4 @@
-import { LOB_RULES, PARTNERS } from "./parsePromoSubject.config.js";
+import { LOB_RULES, PARTNER_ALIASES } from "./parsePromoSubject.config.js";
 import type { Lob } from "./parsePromoSubject.types.js";
 
 const DATE_RANGE_SOURCE = String.raw`(\d{1,2})\.(\d{1,2})\s*[-–]\s*(\d{1,2})\.(\d{1,2})`;
@@ -86,15 +86,32 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export function extractPartner(subject: string): string | null {
-  for (const partner of PARTNERS) {
-    const suffix = new RegExp(
-      String.raw`(?:^|\s|[-–])${escapeRegExp(partner)}\s*$`,
-      "iu",
-    );
-    if (suffix.test(subject)) return partner;
+type PartnerMatch = { canonical: string; index: number };
+
+function normalizePartnerAlias(value: string): string {
+  return value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+function findPartnerMatch(subject: string): PartnerMatch | null {
+  for (const [canonical, aliases] of Object.entries(PARTNER_ALIASES)) {
+    const normalizedAliases = aliases
+      .map(normalizePartnerAlias)
+      .sort((left, right) => right.length - left.length);
+    for (const alias of normalizedAliases) {
+      const phrase = alias.split(" ").map(escapeRegExp).join(String.raw`[^\p{L}\p{N}]+`);
+      const suffix = new RegExp(
+        String.raw`(?:^|[^\p{L}\p{N}])${phrase}[^\p{L}\p{N}]*$`,
+        "iu",
+      );
+      const match = suffix.exec(subject);
+      if (match) return { canonical, index: match.index };
+    }
   }
   return null;
+}
+
+export function extractPartner(subject: string): string | null {
+  return findPartnerMatch(subject)?.canonical ?? null;
 }
 
 export function detectLob(subject: string): Lob | null {
@@ -124,11 +141,8 @@ export function buildPromoName(cleanedSubject: string, partner: string | null): 
   result = result.replace(periodWithDecoration, " ");
 
   if (partner) {
-    const partnerSuffix = new RegExp(
-      String.raw`(?:\s*[-–]\s*|\s+)${escapeRegExp(partner)}\s*$`,
-      "iu",
-    );
-    result = result.replace(partnerSuffix, "");
+    const match = findPartnerMatch(result);
+    if (match?.canonical === partner) result = result.slice(0, match.index);
   }
 
   return result

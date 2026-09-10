@@ -4,6 +4,44 @@ import { parsePromoSubject } from "../src/features/parsePromoSubject/parsePromoS
 const now = new Date("2026-09-09T10:00:00");
 
 describe("parsePromoSubject", () => {
+  it.each([
+    ["citrus", "Citrus"], ["Цитрус", "Citrus"],
+    ["allo", "ALLO"], ["АЛЛО", "ALLO"], ["allo.ua", "ALLO"],
+    ["KTC", "KTC"], ["ктс", "KTC"],
+    ["iSpace", "iSpace"], ["ай спейс", "iSpace"],
+    ["kibernetiki", "Kibernetiki"], ["Кібернетики", "Kibernetiki"], ["кибернетики", "Kibernetiki"],
+    ["TTT", "TTT"], ["ттт", "TTT"],
+    ["Epicentr", "Epicentr"], ["Епіцентр", "Epicentr"], ["Эпицентр", "Epicentr"],
+    ["Brain", "Brain"], ["Брейн", "Brain"], ["brain.com.ua", "Brain"],
+  ])("canonicalizes partner alias %s to %s", (alias, canonical) => {
+    const result = parsePromoSubject(`Promo iPhone 07.09-13.09 - ${alias}`, now);
+    expect(result).toMatchObject({ partner: canonical, promoName: "Promo iPhone", isValid: true });
+    expect(result.warnings).not.toContain("Partner could not be detected");
+  });
+
+  it("parses the live ALLO regression subject", () => {
+    const subject = "UPDATE! Промо по iPhone 17 Pro, 17 Pro Max, Air, 15, 16, 16e (07.09-13.09) - allo";
+    expect(parsePromoSubject(subject, now)).toMatchObject({
+      partner: "ALLO",
+      lob: "iPhone",
+      startDate: "2026-09-07",
+      endDate: "2026-09-13",
+      promoName: "Промо по iPhone 17 Pro, 17 Pro Max, Air, 15, 16, 16e",
+      isValid: true,
+      warnings: [],
+    });
+  });
+
+  it.each(["allo", "Allo", "ALLO", "Алло"])("keeps one canonical value across capitalization: %s", (alias) => {
+    expect(parsePromoSubject(`Promo iPhone 07.09-13.09 - ${alias}`, now).partner).toBe("ALLO");
+  });
+
+  it.each(["Allotment", "MegaBrain", "Citrusade", "Epicentral"])("does not match partner-like substring: %s", (suffix) => {
+    const result = parsePromoSubject(`Promo iPhone 07.09-13.09 - ${suffix}`, now);
+    expect(result.partner).toBeNull();
+    expect(result.warnings).toContain("Partner could not be detected");
+  });
+
   it("parses the primary real-world iPhone subject", () => {
     const subject =
       "UPDATE! Промо по iPhone 17 Pro, 17 Pro Max, Air, 15, 16, 16e (07.09-13.09) - Rozetka";

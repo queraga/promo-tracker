@@ -40,6 +40,8 @@ model PromoPartner {
   rawEmailSubject  String
   reportReceived   Boolean  @default(false)
   reportReceivedAt DateTime?
+  firstReminderSentAt  DateTime?
+  secondReminderSentAt DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

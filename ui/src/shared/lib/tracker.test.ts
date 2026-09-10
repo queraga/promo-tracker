@@ -1,0 +1,20 @@
+import { describe, expect, it } from "vitest";
+import type { PromoDto } from "../../types";
+import { filterPromos, getPartnerCellState, getPartnerColumns, sortPromos } from "./tracker";
+const promo = (id: string, status: PromoDto["status"], lob: string, name: string, partnerName: string): PromoDto => ({ id, status, lob, name, startDate: `2026-09-0${id}T00:00:00.000Z`, endDate: "2026-09-13T00:00:00.000Z", partners: [{ promoPartnerId: `r-${id}`, partnerId: `p-${id}`, partnerName, reportReceived: false, reportReceivedAt: null, rawEmailSubject: name }] });
+const promos = [promo("1", "finished", "AW", "Watch campaign", "Rozetka"), promo("2", "planned", "Mac iPad", "Back to School", "MOYO"), promo("3", "active", "iPhone", "September Phone", "Foxtrot")];
+const empty = { search: "", lob: "", status: "", partner: "" };
+describe("tracker UI logic", () => {
+  it("derives unique dynamic partner columns", () => expect(getPartnerColumns(promos)).toEqual(["Foxtrot", "MOYO", "Rozetka"]));
+  it("adds a new partner as a new column", () => expect(getPartnerColumns([...promos, promo("4", "active", "AW", "New", "Eldorado")])).toContain("Eldorado"));
+  it("searches promo names", () => expect(filterPromos(promos, { ...empty, search: "school" }).map((item) => item.id)).toEqual(["2"]));
+  it("searches partners", () => expect(filterPromos(promos, { ...empty, search: "foxtrot" }).map((item) => item.id)).toEqual(["3"]));
+  it("filters by LOB", () => expect(filterPromos(promos, { ...empty, lob: "AW" }).map((item) => item.id)).toEqual(["1"]));
+  it("filters by status", () => expect(filterPromos(promos, { ...empty, status: "active" }).map((item) => item.id)).toEqual(["3"]));
+  it("filters by partner", () => expect(filterPromos(promos, { ...empty, partner: "MOYO" }).map((item) => item.id)).toEqual(["2"]));
+  it("finished missing is pending", () => expect(getPartnerCellState("finished", promos[0].partners[0])).toBe("pending"));
+  it("finished received is green", () => expect(getPartnerCellState("finished", { ...promos[0].partners[0], reportReceived: true })).toBe("received"));
+  it("active missing is not pending", () => expect(getPartnerCellState("active", promos[0].partners[0])).toBe("participating"));
+  it("planned missing is not pending", () => expect(getPartnerCellState("planned", promos[0].partners[0])).toBe("participating"));
+  it("sorts active, planned, finished", () => expect(sortPromos(promos).map((item) => item.status)).toEqual(["active", "planned", "finished"]));
+});

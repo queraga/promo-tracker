@@ -1,0 +1,7 @@
+import type { Filters, PromoDto, PromoPartnerDto, PromoStatus } from "../../types";
+const statusOrder: Record<PromoStatus, number> = { active: 0, planned: 1, finished: 2 };
+export function getPartnerColumns(promos: PromoDto[]): string[] { return [...new Set(promos.flatMap((promo) => promo.partners.map((partner) => partner.partnerName)))].sort((a, b) => a.localeCompare(b)); }
+export function filterPromos(promos: PromoDto[], filters: Filters): PromoDto[] { const query = filters.search.trim().toLocaleLowerCase(); return promos.filter((promo) => { const search = !query || [promo.name, promo.lob, ...promo.partners.map((partner) => partner.partnerName)].some((value) => value.toLocaleLowerCase().includes(query)); return search && (!filters.lob || promo.lob === filters.lob) && (!filters.status || promo.status === filters.status) && (!filters.partner || promo.partners.some((partner) => partner.partnerName === filters.partner)); }); }
+export function sortPromos(promos: PromoDto[]): PromoDto[] { return [...promos].sort((a, b) => statusOrder[a.status] - statusOrder[b.status] || Date.parse(b.startDate) - Date.parse(a.startDate)); }
+export type PartnerCellState = "none" | "participating" | "pending" | "received";
+export function getPartnerCellState(status: PromoStatus, partner?: PromoPartnerDto): PartnerCellState { if (!partner) return "none"; if (status !== "finished") return "participating"; return partner.reportReceived ? "received" : "pending"; }

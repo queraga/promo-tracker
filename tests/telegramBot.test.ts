@@ -46,6 +46,7 @@ function records(start = "2026-09-07", end = "2026-09-13") {
   const promoPartner: PromoPartner = {
     id: "relation-1", promoId: promo.id, partnerId: partner.id, rawEmailSubject: subject,
     reportReceived: false, reportReceivedAt: null, createdAt, updatedAt: createdAt,
+    firstReminderSentAt: null, secondReminderSentAt: null,
   };
   return { promo, partner, promoPartner };
 }

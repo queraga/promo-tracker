@@ -4,7 +4,7 @@
 
 1. Run `npm install`.
 2. Run `npm install --prefix ui`.
-3. Copy `.env.example` to `.env` and set `DATABASE_URL`, `TELEGRAM_BOT_TOKEN`, and `REPORT_REMINDER_CHAT_ID`.
+3. Copy `.env.example` to `.env` and set `DATABASE_URL`, `TELEGRAM_BOT_TOKEN`, `REPORT_REMINDER_CHAT_ID`, and a random `AUTH_JWT_SECRET` of at least 32 characters.
 4. Apply migrations only when setting up a new database: `npm run db:migrate`.
 
 Start each service in a separate terminal:
@@ -18,6 +18,17 @@ npm run ui   # Admin UI, http://localhost:5173
 The UI reads SQLite data through the API. It never connects to Prisma or SQLite directly.
 
 The bot fails at startup with a clear error when `TELEGRAM_BOT_TOKEN` is missing.
+
+## Authentication
+
+The Admin UI uses a 12-hour JWT stored in an HttpOnly, SameSite=Lax cookie. There is no public signup. `USER` can view the tracker and update report state; `SUPERUSER` can additionally delete a promo or remove one partner association. Promo deletion also removes its PromoPartner rows but preserves Partner records.
+
+Create users manually (the password prompt is not stored or printed):
+
+```sh
+npm run user:create -- admin@example.com SUPERUSER
+npm run user:create -- kam@example.com USER
+```
 
 ## Automatic report reminders
 

@@ -9,14 +9,18 @@
     "ui": "npm --prefix ui run dev",
     "ui:build": "npm --prefix ui run build",
     "ui:test": "npm --prefix ui test",
+    "user:create": "tsx src/app/createUser.ts",
     "test": "touch prisma/test.db && DATABASE_URL=file:./test.db prisma migrate deploy && DATABASE_URL=file:./test.db vitest run",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.5.0",
     "@types/supertest": "^7.2.1",
     "prisma": "^6.19.3",
@@ -27,8 +31,11 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "grammy": "^1.46.0"
+    "grammy": "^1.46.0",
+    "jsonwebtoken": "^9.0.3"
   }
 }

@@ -38,6 +38,12 @@ describe("user administration API", () => {
   });
 
   it("prevents USER from listing users", async () => expect((await (await authenticatedAgent(makeUser("USER", 1))).get("/api/users")).status).toBe(403));
+  it("rechecks a changed role on an existing session", async () => {
+    const admin = makeUser("SUPERUSER", 1);
+    const agent = await authenticatedAgent(admin);
+    admin.role = "USER";
+    expect((await agent.get("/api/users")).status).toBe(403);
+  });
   it("allows SUPERUSER to list safe user records", async () => {
     const admin = makeUser("SUPERUSER", 1);
     const response = await (await authenticatedAgent(admin)).get("/api/users");

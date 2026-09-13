@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { createUser, getUsers, updateUser, updateUserPassword } from "../shared/api/client";
 import type { CurrentUser, ManagedUser } from "../types";
 
-type Props = { currentUser: CurrentUser; onError: (message: string) => void };
+type Props = { currentUser: CurrentUser; onCurrentUserChange: (user: ManagedUser) => void; onError: (message: string) => void };
 
 function PasswordReset({ user, onError }: { user: ManagedUser; onError: Props["onError"] }) {
   const [password, setPassword] = useState("");
@@ -21,7 +21,7 @@ function PasswordReset({ user, onError }: { user: ManagedUser; onError: Props["o
   </form>;
 }
 
-export function UserManagement({ currentUser, onError }: Props) {
+export function UserManagement({ currentUser, onCurrentUserChange, onError }: Props) {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -38,7 +38,7 @@ export function UserManagement({ currentUser, onError }: Props) {
   };
   const change = async (user: ManagedUser, update: { role?: CurrentUser["role"]; isActive?: boolean }) => {
     setBusyId(user.id);
-    try { const updated = await updateUser(user.id, update); setUsers((current) => current.map((item) => item.id === updated.id ? updated : item)); }
+    try { const updated = await updateUser(user.id, update); setUsers((current) => current.map((item) => item.id === updated.id ? updated : item)); if (updated.id === currentUser.id) onCurrentUserChange(updated); }
     catch (reason) { onError((reason as Error).message); }
     finally { setBusyId(null); }
   };

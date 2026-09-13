@@ -9,7 +9,7 @@ import { deletePromo, getCurrentUser, getPartners, getPromo, getPromos, logout, 
 import { removePartnerFromState, removePromoFromState } from "./shared/lib/admin";
 import { filterPromos, getPartnerColumns, sortPromos } from "./shared/lib/tracker";
 import { readMobilePartner, readPartnerColumns, writeMobilePartner, writePartnerColumns } from "./shared/lib/preferences";
-import type { CurrentUser, Filters, PromoDto } from "./types";
+import type { CurrentUser, Filters, ManagedUser, PromoDto } from "./types";
 
 const initialFilters: Filters = { search: "", lob: "", status: "", partner: "" };
 type Page = "tracker" | "users";
@@ -77,6 +77,11 @@ export default function App() {
   const updateSelectedPartners = (selection: string[] | null) => { setSelectedPartners(selection); writePartnerColumns(window.localStorage, user.id, selection); };
   const updateMobilePartner = (partner: string) => { setMobilePartner(partner); writeMobilePartner(window.localStorage, user.id, partner); };
   const signOut = () => void logout().finally(() => { setUser(null); setPromos([]); setPartners([]); setMobilePartner(""); setSelected(null); setPage("tracker"); });
+  const updateCurrentUser = (updated: ManagedUser) => {
+    if (!updated.isActive) { signOut(); return; }
+    setUser({ id: updated.id, email: updated.email, role: updated.role });
+    if (updated.role !== "SUPERUSER") setPage("tracker");
+  };
 
   return <div className="shell">
     <aside className="sidebar">
@@ -92,7 +97,7 @@ export default function App() {
       <p>Telegram — канал додавання промо</p>
     </aside>
     <main>
-      {page === "users" && user.role === "SUPERUSER" ? <UserManagement currentUser={user} onError={setError} /> : <>
+      {page === "users" && user.role === "SUPERUSER" ? <UserManagement currentUser={user} onCurrentUserChange={updateCurrentUser} onError={setError} /> : <>
         <header className="page-header"><div><span className="eyebrow">Робочий простір KAM</span><h1>Promo Tracker</h1><p>Промоактивності та звіти партнерів</p></div><div className="summary"><div><span>Активні</span><strong>{promos.filter((promo) => promo.status === "active").length}</strong></div><div><span>Заплановані</span><strong>{promos.filter((promo) => promo.status === "planned").length}</strong></div><div><span>Очікуються звіти</span><strong>{pending}</strong></div></div></header>
         <TrackerToolbar filters={filters} setFilters={setFilters} lobs={[...new Set(promos.map((promo) => promo.lob))].sort()} partners={knownPartners} selectedPartners={selectedPartners} setSelectedPartners={updateSelectedPartners} />
         {loading ? <div className="empty">Завантаження…</div> : <>{promos.length === 0 ? <div className="empty desktop-empty">Промо ще не додані.</div> : <TrackerTable promos={visiblePromos} partners={visiblePartners} onSelect={selectPromo} />}<MobilePartnerFeed promos={filteredPromos} partners={knownPartners} selectedPartner={mobilePartner} pendingOnly={pendingOnly} onPartnerChange={updateMobilePartner} onSelect={selectPromo} /></>}

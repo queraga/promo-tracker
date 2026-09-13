@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { LoginPage } from "./LoginPage";
 import { PromoDrawer } from "./PromoDrawer";
+import { UserManagement } from "./UserManagement";
 import type { CurrentUser, PromoDto } from "../types";
 
 const promo: PromoDto = { id: "promo-1", lob: "AW", name: "Test Promo", startDate: "2026-09-01", endDate: "2026-09-02", status: "finished", partners: [{ promoPartnerId: "relation-1", partnerId: "partner-1", partnerName: "Rozetka", reportReceived: false, reportReceivedAt: null, rawEmailSubject: "Test Promo" }] };
@@ -9,7 +10,8 @@ const user = (role: CurrentUser["role"]): CurrentUser => ({ id: 1, email: "user@
 const drawer = (role: CurrentUser["role"]) => renderToStaticMarkup(<PromoDrawer promo={promo} user={user(role)} busyId={null} onClose={vi.fn()} onToggle={vi.fn()} onDeletePromo={vi.fn()} onRemovePartner={vi.fn()} />);
 
 describe("authentication components", () => {
-  it("renders the unauthenticated login form", () => { const html = renderToStaticMarkup(<LoginPage onLogin={vi.fn()} />); expect(html).toContain("Вхід"); expect(html).toContain('type="email"'); expect(html).toContain('type="password"'); });
+  it("renders the unauthenticated internal-workspace login form", () => { const html = renderToStaticMarkup(<LoginPage onLogin={vi.fn()} />); expect(html).toContain("Вхід"); expect(html).toContain("Доступ і облікові дані надає адміністратор"); expect(html).toContain('type="email"'); expect(html).toContain('type="password"'); });
   it("does not render delete controls for USER", () => { const html = drawer("USER"); expect(html).not.toContain("Видалити промо"); expect(html).not.toContain("Видалити зв’язок"); });
   it("renders delete controls for SUPERUSER", () => { const html = drawer("SUPERUSER"); expect(html).toContain("Видалити промо"); expect(html).toContain("Видалити зв’язок"); });
+  it("renders user provisioning and password controls for SUPERUSER administration", () => { const html = renderToStaticMarkup(<UserManagement currentUser={user("SUPERUSER")} onError={vi.fn()} />); expect(html).toContain("Новий користувач"); expect(html).toContain("Тимчасовий пароль"); expect(html).toContain("SUPERUSER"); });
 });

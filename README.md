@@ -1,5 +1,9 @@
 # Promo Tracker
 
+## Authentication behavior
+
+Protected requests reload the current user, so deactivating an account blocks its existing sessions immediately. Resetting a password changes future login credentials but does not revoke an existing JWT; that session remains valid until its 12-hour expiry unless the account is deactivated.
+
 ## Local M4 setup
 
 1. Run `npm install`.

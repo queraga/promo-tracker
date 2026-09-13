@@ -4,6 +4,7 @@ export const getCurrentUser = () => apiFetch<CurrentUser>("/api/auth/me");
 export const login = (email: string, password: string) => apiFetch<CurrentUser>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
 export const logout = () => apiFetch<{ success: boolean }>("/api/auth/logout", { method: "POST" });
 export const getPromos = () => apiFetch<PromoDto[]>("/api/promos");
+export const getPartners = () => apiFetch<string[]>("/api/partners");
 export const getPromo = (id: string) => apiFetch<PromoDto>(`/api/promos/${id}`);
 export const getPendingReports = () => apiFetch<unknown[]>("/api/reports/pending");
 export const updateReportStatus = (id: string, received: boolean) => apiFetch<{ promoPartnerId: string; reportReceived: boolean; reportReceivedAt: string | null }>(`/api/promo-partners/${id}/report`, { method: "PATCH", body: JSON.stringify({ received }) });

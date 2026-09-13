@@ -4,9 +4,10 @@ import { PromoDrawer } from "./components/PromoDrawer";
 import { TrackerTable } from "./components/TrackerTable";
 import { TrackerToolbar } from "./components/TrackerToolbar";
 import { UserManagement } from "./components/UserManagement";
-import { deletePromo, getCurrentUser, getPromo, getPromos, logout, removePromoPartner, updateReportStatus } from "./shared/api/client";
+import { deletePromo, getCurrentUser, getPartners, getPromo, getPromos, logout, removePromoPartner, updateReportStatus } from "./shared/api/client";
 import { removePartnerFromState, removePromoFromState } from "./shared/lib/admin";
 import { filterPromos, getPartnerColumns, sortPromos } from "./shared/lib/tracker";
+import { readPartnerColumns, writePartnerColumns } from "./shared/lib/preferences";
 import type { CurrentUser, Filters, PromoDto } from "./types";
 
 const initialFilters: Filters = { search: "", lob: "", status: "", partner: "" };
@@ -16,6 +17,8 @@ export default function App() {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [promos, setPromos] = useState<PromoDto[]>([]);
+  const [partners, setPartners] = useState<string[]>([]);
+  const [selectedPartners, setSelectedPartners] = useState<string[] | null>(null);
   const [filters, setFilters] = useState(initialFilters);
   const [pendingOnly, setPendingOnly] = useState(false);
   const [page, setPage] = useState<Page>("tracker");
@@ -24,15 +27,21 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const loadPromos = useCallback(async () => {
+  const loadWorkspace = useCallback(async (currentUser: CurrentUser) => {
     setLoading(true);
-    try { setPromos(await getPromos()); }
+    try {
+      const [loadedPromos, loadedPartners] = await Promise.all([getPromos(), getPartners()]);
+      setPromos(loadedPromos);
+      setPartners(loadedPartners);
+      setSelectedPartners(readPartnerColumns(window.localStorage, currentUser.id, loadedPartners));
+    }
     catch (reason) { setError((reason as Error).message); }
     finally { setLoading(false); }
   }, []);
-  useEffect(() => { getCurrentUser().then((current) => { setUser(current); return loadPromos(); }).catch(() => setUser(null)).finally(() => setAuthLoading(false)); }, [loadPromos]);
+  useEffect(() => { getCurrentUser().then((current) => { setUser(current); return loadWorkspace(current); }).catch(() => setUser(null)).finally(() => setAuthLoading(false)); }, [loadWorkspace]);
 
-  const partners = useMemo(() => getPartnerColumns(promos), [promos]);
+  const knownPartners = useMemo(() => partners.length ? partners : getPartnerColumns(promos), [partners, promos]);
+  const visiblePartners = useMemo(() => selectedPartners === null ? knownPartners : knownPartners.filter((partner) => selectedPartners.includes(partner)), [knownPartners, selectedPartners]);
   const visiblePromos = useMemo(() => {
     const filtered = filterPromos(promos, filters);
     return sortPromos(pendingOnly ? filtered.filter((promo) => promo.status === "finished" && promo.partners.some((partner) => !partner.reportReceived)) : filtered);
@@ -40,7 +49,7 @@ export default function App() {
   const pending = promos.reduce((count, promo) => count + (promo.status === "finished" ? promo.partners.filter((partner) => !partner.reportReceived).length : 0), 0);
 
   if (authLoading) return <main className="login-page">Завантаження…</main>;
-  if (!user) return <LoginPage onLogin={(current) => { setUser(current); void loadPromos(); }} />;
+  if (!user) return <LoginPage onLogin={(current) => { setUser(current); void loadWorkspace(current); }} />;
 
   const selectPromo = async (id: string) => { try { setSelected(await getPromo(id)); } catch (reason) { setError((reason as Error).message); } };
   const toggleReport = async (id: string, received: boolean) => {
@@ -64,7 +73,8 @@ export default function App() {
     catch (reason) { setError((reason as Error).message); }
   };
   const showAll = () => { setPage("tracker"); setPendingOnly(false); setFilters(initialFilters); };
-  const signOut = () => void logout().finally(() => { setUser(null); setPromos([]); setSelected(null); setPage("tracker"); });
+  const updateSelectedPartners = (selection: string[] | null) => { setSelectedPartners(selection); writePartnerColumns(window.localStorage, user.id, selection); };
+  const signOut = () => void logout().finally(() => { setUser(null); setPromos([]); setPartners([]); setSelected(null); setPage("tracker"); });
 
   return <div className="shell">
     <aside className="sidebar">
@@ -82,8 +92,8 @@ export default function App() {
     <main>
       {page === "users" && user.role === "SUPERUSER" ? <UserManagement currentUser={user} onError={setError} /> : <>
         <header className="page-header"><div><span className="eyebrow">Робочий простір KAM</span><h1>Promo Tracker</h1><p>Промоактивності та звіти партнерів</p></div><div className="summary"><div><span>Активні</span><strong>{promos.filter((promo) => promo.status === "active").length}</strong></div><div><span>Заплановані</span><strong>{promos.filter((promo) => promo.status === "planned").length}</strong></div><div><span>Очікуються звіти</span><strong>{pending}</strong></div></div></header>
-        <TrackerToolbar filters={filters} setFilters={setFilters} lobs={[...new Set(promos.map((promo) => promo.lob))].sort()} partners={partners} />
-        {loading ? <div className="empty">Завантаження…</div> : promos.length === 0 ? <div className="empty">Промо ще не додані.</div> : <TrackerTable promos={visiblePromos} partners={partners} onSelect={selectPromo} />}
+        <TrackerToolbar filters={filters} setFilters={setFilters} lobs={[...new Set(promos.map((promo) => promo.lob))].sort()} partners={knownPartners} selectedPartners={selectedPartners} setSelectedPartners={updateSelectedPartners} />
+        {loading ? <div className="empty">Завантаження…</div> : promos.length === 0 ? <div className="empty">Промо ще не додані.</div> : <TrackerTable promos={visiblePromos} partners={visiblePartners} onSelect={selectPromo} />}
       </>}
     </main>
     {error && <div className="error app-error" role="alert">{error}<button onClick={() => setError("")} aria-label="Закрити помилку">×</button></div>}

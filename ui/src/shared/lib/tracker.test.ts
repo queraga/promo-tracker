@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { PromoDto } from "../../types";
-import { filterPromos, getPartnerCellState, getPartnerColumns, sortPromos } from "./tracker";
+import { filterPromos, getPartnerCellState, getPartnerColumns, getVisiblePartnerColumns, sortPromos } from "./tracker";
 const promo = (id: string, status: PromoDto["status"], lob: string, name: string, partnerName: string): PromoDto => ({ id, status, lob, name, startDate: `2026-09-0${id}T00:00:00.000Z`, endDate: "2026-09-13T00:00:00.000Z", partners: [{ promoPartnerId: `r-${id}`, partnerId: `p-${id}`, partnerName, reportReceived: false, reportReceivedAt: null, rawEmailSubject: name }] });
 const promos = [promo("1", "finished", "AW", "Watch campaign", "Rozetka"), promo("2", "planned", "Mac iPad", "Back to School", "MOYO"), promo("3", "active", "iPhone", "September Phone", "Foxtrot")];
 const empty = { search: "", lob: "", status: "", partner: "" };
 describe("tracker UI logic", () => {
   it("derives unique dynamic partner columns", () => expect(getPartnerColumns(promos)).toEqual(["Foxtrot", "MOYO", "Rozetka"]));
   it("adds a new partner as a new column", () => expect(getPartnerColumns([...promos, promo("4", "active", "AW", "New", "Eldorado")])).toContain("Eldorado"));
+  it("shows every column for select-all", () => expect(getVisiblePartnerColumns(["Rozetka", "Comfy"], null)).toEqual(["Rozetka", "Comfy"]));
+  it("shows no partner columns after clear-all", () => expect(getVisiblePartnerColumns(["Rozetka", "Comfy"], [])).toEqual([]));
+  it("shows only explicitly selected columns", () => expect(getVisiblePartnerColumns(["Rozetka", "Comfy", "ALLO"], ["Comfy", "ALLO"])).toEqual(["Comfy", "ALLO"]));
   it("searches promo names", () => expect(filterPromos(promos, { ...empty, search: "school" }).map((item) => item.id)).toEqual(["2"]));
   it("searches partners", () => expect(filterPromos(promos, { ...empty, search: "foxtrot" }).map((item) => item.id)).toEqual(["3"]));
   it("filters by LOB", () => expect(filterPromos(promos, { ...empty, lob: "AW" }).map((item) => item.id)).toEqual(["1"]));

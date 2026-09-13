@@ -21,6 +21,11 @@ describe("browser preferences", () => {
     writePartnerColumns(storage, 7, null);
     expect(readPartnerColumns(storage, 7, ["Rozetka"])).toBeNull();
   });
+  it("persists a cleared zero-column selection", () => {
+    const storage = new MemoryStorage();
+    writePartnerColumns(storage, 7, []);
+    expect(readPartnerColumns(storage, 7, ["Rozetka", "Comfy"])).toEqual([]);
+  });
   it("ignores malformed preferences", () => {
     const storage = new MemoryStorage();
     storage.setItem("promo-tracker:partner-columns:7", "not json");

@@ -24,10 +24,12 @@ export function PartnerColumnSelector({ partners, selected, onChange }: Props) {
   return <div className="column-selector" ref={container}>
     <span className="control-label">Колонки партнерів</span>
     <button type="button" className="column-trigger" aria-haspopup="true" aria-expanded={open} onClick={() => setOpen((current) => !current)}>{all ? "Усі партнери" : `Обрано ${selected.length}`}</button>
-    {open && <div className="column-popover" role="group" aria-label="Видимі колонки партнерів">
-      <button type="button" className="select-all" onClick={() => onChange(null)}>Усі партнери</button>
+    <div className="column-popover" role="group" aria-label="Видимі колонки партнерів" hidden={!open}>
+      <div className="column-actions">
+        <button type="button" className="select-all" onClick={() => onChange(null)}>Обрати всіх</button>
+        <button type="button" className="clear-columns" onClick={() => onChange([])}>Очистити</button>
+      </div>
       <div className="column-options">{partners.map((partner) => <label key={partner}><input type="checkbox" checked={selectedSet.has(partner)} onChange={(event) => toggle(partner, event.target.checked)} /> <span>{partner}</span></label>)}</div>
-      {!all && <button type="button" className="reset-columns" onClick={() => onChange(null)}>Скинути до всіх</button>}
-    </div>}
+    </div>
   </div>;
 }

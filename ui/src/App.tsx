@@ -7,7 +7,7 @@ import { TrackerToolbar } from "./components/TrackerToolbar";
 import { UserManagement } from "./components/UserManagement";
 import { deletePromo, getCurrentUser, getPartners, getPromo, getPromos, logout, removePromoPartner, updateReportStatus } from "./shared/api/client";
 import { removePartnerFromState, removePromoFromState } from "./shared/lib/admin";
-import { filterPromos, getPartnerColumns, sortPromos } from "./shared/lib/tracker";
+import { filterPromos, getPartnerColumns, getVisiblePartnerColumns, sortPromos } from "./shared/lib/tracker";
 import { readMobilePartner, readPartnerColumns, writeMobilePartner, writePartnerColumns } from "./shared/lib/preferences";
 import type { CurrentUser, Filters, ManagedUser, PromoDto } from "./types";
 
@@ -44,7 +44,7 @@ export default function App() {
   useEffect(() => { getCurrentUser().then((current) => { setUser(current); return loadWorkspace(current); }).catch(() => setUser(null)).finally(() => setAuthLoading(false)); }, [loadWorkspace]);
 
   const knownPartners = useMemo(() => partners.length ? partners : getPartnerColumns(promos), [partners, promos]);
-  const visiblePartners = useMemo(() => selectedPartners === null ? knownPartners : knownPartners.filter((partner) => selectedPartners.includes(partner)), [knownPartners, selectedPartners]);
+  const visiblePartners = useMemo(() => getVisiblePartnerColumns(knownPartners, selectedPartners), [knownPartners, selectedPartners]);
   const filteredPromos = useMemo(() => filterPromos(promos, filters), [promos, filters]);
   const visiblePromos = useMemo(() => sortPromos(pendingOnly ? filteredPromos.filter((promo) => promo.status === "finished" && promo.partners.some((partner) => !partner.reportReceived)) : filteredPromos), [filteredPromos, pendingOnly]);
   const pending = promos.reduce((count, promo) => count + (promo.status === "finished" ? promo.partners.filter((partner) => !partner.reportReceived).length : 0), 0);

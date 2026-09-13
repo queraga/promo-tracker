@@ -15,7 +15,19 @@ describe("desktop matrix components", () => {
     expect(html).toContain('class="sticky status-column"');
   });
   it("shows all and selected counts independently of the partner filter", () => {
-    expect(renderToStaticMarkup(<PartnerColumnSelector partners={["Rozetka", "Comfy"]} selected={null} onChange={vi.fn()} />)).toContain("Усі партнери");
+    const all = renderToStaticMarkup(<PartnerColumnSelector partners={["Rozetka", "Comfy"]} selected={null} onChange={vi.fn()} />);
+    expect(all).toContain("Усі партнери");
+    expect(all).toContain("Обрати всіх");
+    expect(all).toContain("Очистити");
     expect(renderToStaticMarkup(<PartnerColumnSelector partners={["Rozetka", "Comfy"]} selected={["Comfy"]} onChange={vi.fn()} />)).toContain("Обрано 1");
+    expect(renderToStaticMarkup(<PartnerColumnSelector partners={["Rozetka", "Comfy"]} selected={[]} onChange={vi.fn()} />)).toContain("Обрано 0");
+  });
+  it("keeps a valid context-only table with zero partner columns", () => {
+    const html = renderToStaticMarkup(<TrackerTable promos={[promo]} partners={[]} onSelect={vi.fn()} />);
+    expect(html).toContain("LOB");
+    expect(html).toContain("Промо");
+    expect(html).toContain("Період");
+    expect(html).toContain("Статус");
+    expect(html).not.toContain("Rozetka");
   });
 });

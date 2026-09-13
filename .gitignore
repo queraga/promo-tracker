@@ -49,3 +49,11 @@ prisma/dev.db-journal
 tmp/
 temp/
 .cache/
+
+# SQLite runtime sidecars
+*.db-wal
+*.db-shm
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm

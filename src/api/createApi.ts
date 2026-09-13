@@ -2,6 +2,7 @@ import type { User } from "@prisma/client";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { type NextFunction, type Request, type Response } from "express";
+import path from "node:path";
 import { authenticateUser, findUserByEmail, findUserById, signAuthToken, toSafeUser } from "../features/auth/authService.js";
 import { AUTH_COOKIE, requireAuth, requireRole } from "../features/auth/authMiddleware.js";
 import { deletePromo, removePromoPartner } from "../features/promoAdmin/deletePromo.js";
@@ -37,6 +38,22 @@ export function createApi(overrides: Partial<ApiDependencies> = {}) {
   app.patch("/api/promo-partners/:id/report", authenticated, async (req, res, next) => { try { const id = String(req.params.id); if (typeof req.body?.received !== "boolean") { res.status(400).json({ error: "Поле received має бути boolean" }); return; } if (!await services.getPromoPartnerById(id)) { res.status(404).json({ error: "Участь партнера не знайдено" }); return; } const updated = req.body.received ? await services.markReportReceived(id) : await services.markReportPending(id); res.json({ promoPartnerId: updated.id, reportReceived: updated.reportReceived, reportReceivedAt: updated.reportReceivedAt?.toISOString() ?? null }); } catch (error) { next(error); } });
   app.delete("/api/promos/:promoId", authenticated, requireRole("SUPERUSER"), async (req, res, next) => { try { if (!await services.deletePromo(String(req.params.promoId))) { res.status(404).json({ error: "Промо не знайдено" }); return; } res.json({ success: true }); } catch (error) { next(error); } });
   app.delete("/api/promos/:promoId/partners/:partnerId", authenticated, requireRole("SUPERUSER"), async (req, res, next) => { try { if (!await services.removePromoPartner(String(req.params.promoId), String(req.params.partnerId))) { res.status(404).json({ error: "Участь партнера не знайдено" }); return; } res.json({ success: true }); } catch (error) { next(error); } });
+
+  if (process.env.NODE_ENV === "production") {
+    const uiDistPath = path.resolve(process.cwd(), "ui/dist");
+    const serveUi = express.static(uiDistPath);
+    app.use((req, res, next) => {
+      if (/^\/api(?:\/|$)/i.test(req.path)) return next();
+      if (req.method !== "GET" && req.method !== "HEAD") return next();
+      serveUi(req, res, (error) => {
+        if (error) return next(error);
+        res.sendFile(path.join(uiDistPath, "index.html"), (error) => {
+          if (error) next(error);
+        });
+      });
+    });
+  }
+
   app.use((_req: Request, res: Response) => res.status(404).json({ error: "Маршрут не знайдено" }));
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => { console.error("API request failed", error); res.status(500).json({ error: "Внутрішня помилка сервера" }); });
   return app;

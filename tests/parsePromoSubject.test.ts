@@ -1,9 +1,28 @@
 import { describe, expect, it } from "vitest";
 import { parsePromoSubject } from "../src/features/parsePromoSubject/parsePromoSubject.js";
+import { CANONICAL_PARTNERS, PARTNER_ALIASES } from "../src/features/parsePromoSubject/parsePromoSubject.config.js";
 
 const now = new Date("2026-09-09T10:00:00");
 
 describe("parsePromoSubject", () => {
+  it("recognizes all 29 canonical partner names", () => {
+    expect(CANONICAL_PARTNERS).toHaveLength(29);
+    for (const canonical of CANONICAL_PARTNERS) {
+      expect(parsePromoSubject(`Promo iPhone 07.09-13.09 - ${canonical}`, now).partner).toBe(canonical);
+    }
+  });
+
+  it("recognizes every configured alias with case and separator normalization", () => {
+    for (const [canonical, aliases] of Object.entries(PARTNER_ALIASES)) {
+      for (const alias of aliases) {
+        const upper = alias.toLocaleUpperCase();
+        expect(parsePromoSubject(`Promo iPhone 07.09-13.09 — ${upper}`, now).partner).toBe(canonical);
+        const spaced = alias.replace(/[.\-_\s]+/gu, " / ");
+        expect(parsePromoSubject(`Promo iPhone 07.09-13.09 - ${spaced}`, now).partner).toBe(canonical);
+      }
+    }
+  });
+
   it.each([
     ["citrus", "Citrus"], ["Цитрус", "Citrus"],
     ["allo", "ALLO"], ["АЛЛО", "ALLO"], ["allo.ua", "ALLO"],
@@ -40,6 +59,18 @@ describe("parsePromoSubject", () => {
     const result = parsePromoSubject(`Promo iPhone 07.09-13.09 - ${suffix}`, now);
     expect(result.partner).toBeNull();
     expect(result.warnings).toContain("Partner could not be detected");
+  });
+
+  it.each(["Sota", "Stylus", "Стилус", "Brainstorm", "Izhakov", "Assolutely", "Mobioption"])(
+    "does not match ambiguous or partial partner alias: %s",
+    (suffix) => {
+      const result = parsePromoSubject(`Promo iPhone 07.09-13.09 - ${suffix}`, now);
+      expect(result.partner).toBeNull();
+    },
+  );
+
+  it("keeps the legacy ЖЖУК alias fully supported", () => {
+    expect(parsePromoSubject("Promo iPhone 07.09-13.09 - жжук", now).partner).toBe("ЖЖУК");
   });
 
   it("parses the primary real-world iPhone subject", () => {

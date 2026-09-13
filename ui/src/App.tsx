@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { LoginPage } from "./components/LoginPage";
+import { MobilePartnerFeed } from "./components/MobilePartnerFeed";
 import { PromoDrawer } from "./components/PromoDrawer";
 import { TrackerTable } from "./components/TrackerTable";
 import { TrackerToolbar } from "./components/TrackerToolbar";
@@ -7,7 +8,7 @@ import { UserManagement } from "./components/UserManagement";
 import { deletePromo, getCurrentUser, getPartners, getPromo, getPromos, logout, removePromoPartner, updateReportStatus } from "./shared/api/client";
 import { removePartnerFromState, removePromoFromState } from "./shared/lib/admin";
 import { filterPromos, getPartnerColumns, sortPromos } from "./shared/lib/tracker";
-import { readPartnerColumns, writePartnerColumns } from "./shared/lib/preferences";
+import { readMobilePartner, readPartnerColumns, writeMobilePartner, writePartnerColumns } from "./shared/lib/preferences";
 import type { CurrentUser, Filters, PromoDto } from "./types";
 
 const initialFilters: Filters = { search: "", lob: "", status: "", partner: "" };
@@ -19,6 +20,7 @@ export default function App() {
   const [promos, setPromos] = useState<PromoDto[]>([]);
   const [partners, setPartners] = useState<string[]>([]);
   const [selectedPartners, setSelectedPartners] = useState<string[] | null>(null);
+  const [mobilePartner, setMobilePartner] = useState("");
   const [filters, setFilters] = useState(initialFilters);
   const [pendingOnly, setPendingOnly] = useState(false);
   const [page, setPage] = useState<Page>("tracker");
@@ -34,6 +36,7 @@ export default function App() {
       setPromos(loadedPromos);
       setPartners(loadedPartners);
       setSelectedPartners(readPartnerColumns(window.localStorage, currentUser.id, loadedPartners));
+      setMobilePartner(readMobilePartner(window.localStorage, currentUser.id, loadedPartners));
     }
     catch (reason) { setError((reason as Error).message); }
     finally { setLoading(false); }
@@ -42,10 +45,8 @@ export default function App() {
 
   const knownPartners = useMemo(() => partners.length ? partners : getPartnerColumns(promos), [partners, promos]);
   const visiblePartners = useMemo(() => selectedPartners === null ? knownPartners : knownPartners.filter((partner) => selectedPartners.includes(partner)), [knownPartners, selectedPartners]);
-  const visiblePromos = useMemo(() => {
-    const filtered = filterPromos(promos, filters);
-    return sortPromos(pendingOnly ? filtered.filter((promo) => promo.status === "finished" && promo.partners.some((partner) => !partner.reportReceived)) : filtered);
-  }, [promos, filters, pendingOnly]);
+  const filteredPromos = useMemo(() => filterPromos(promos, filters), [promos, filters]);
+  const visiblePromos = useMemo(() => sortPromos(pendingOnly ? filteredPromos.filter((promo) => promo.status === "finished" && promo.partners.some((partner) => !partner.reportReceived)) : filteredPromos), [filteredPromos, pendingOnly]);
   const pending = promos.reduce((count, promo) => count + (promo.status === "finished" ? promo.partners.filter((partner) => !partner.reportReceived).length : 0), 0);
 
   if (authLoading) return <main className="login-page">Завантаження…</main>;
@@ -74,7 +75,8 @@ export default function App() {
   };
   const showAll = () => { setPage("tracker"); setPendingOnly(false); setFilters(initialFilters); };
   const updateSelectedPartners = (selection: string[] | null) => { setSelectedPartners(selection); writePartnerColumns(window.localStorage, user.id, selection); };
-  const signOut = () => void logout().finally(() => { setUser(null); setPromos([]); setPartners([]); setSelected(null); setPage("tracker"); });
+  const updateMobilePartner = (partner: string) => { setMobilePartner(partner); writeMobilePartner(window.localStorage, user.id, partner); };
+  const signOut = () => void logout().finally(() => { setUser(null); setPromos([]); setPartners([]); setMobilePartner(""); setSelected(null); setPage("tracker"); });
 
   return <div className="shell">
     <aside className="sidebar">
@@ -93,7 +95,7 @@ export default function App() {
       {page === "users" && user.role === "SUPERUSER" ? <UserManagement currentUser={user} onError={setError} /> : <>
         <header className="page-header"><div><span className="eyebrow">Робочий простір KAM</span><h1>Promo Tracker</h1><p>Промоактивності та звіти партнерів</p></div><div className="summary"><div><span>Активні</span><strong>{promos.filter((promo) => promo.status === "active").length}</strong></div><div><span>Заплановані</span><strong>{promos.filter((promo) => promo.status === "planned").length}</strong></div><div><span>Очікуються звіти</span><strong>{pending}</strong></div></div></header>
         <TrackerToolbar filters={filters} setFilters={setFilters} lobs={[...new Set(promos.map((promo) => promo.lob))].sort()} partners={knownPartners} selectedPartners={selectedPartners} setSelectedPartners={updateSelectedPartners} />
-        {loading ? <div className="empty">Завантаження…</div> : promos.length === 0 ? <div className="empty">Промо ще не додані.</div> : <TrackerTable promos={visiblePromos} partners={visiblePartners} onSelect={selectPromo} />}
+        {loading ? <div className="empty">Завантаження…</div> : <>{promos.length === 0 ? <div className="empty desktop-empty">Промо ще не додані.</div> : <TrackerTable promos={visiblePromos} partners={visiblePartners} onSelect={selectPromo} />}<MobilePartnerFeed promos={filteredPromos} partners={knownPartners} selectedPartner={mobilePartner} pendingOnly={pendingOnly} onPartnerChange={updateMobilePartner} onSelect={selectPromo} /></>}
       </>}
     </main>
     {error && <div className="error app-error" role="alert">{error}<button onClick={() => setError("")} aria-label="Закрити помилку">×</button></div>}

@@ -14,8 +14,9 @@ export function PartnerColumnSelector({ partners, selected, onChange }: Props) {
     return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", escape); };
   }, [open]);
 
-  const all = selected === null;
-  const selectedSet = new Set(selected ?? partners);
+  const availableSelection = selected?.filter((partner) => partners.includes(partner)) ?? null;
+  const all = availableSelection === null;
+  const selectedSet = new Set(availableSelection ?? partners);
   const toggle = (partner: string, checked: boolean) => {
     const next = checked ? [...selectedSet, partner] : [...selectedSet].filter((name) => name !== partner);
     onChange(partners.filter((name) => next.includes(name)));
@@ -23,7 +24,7 @@ export function PartnerColumnSelector({ partners, selected, onChange }: Props) {
 
   return <div className="column-selector" ref={container}>
     <span className="control-label">Колонки партнерів</span>
-    <button type="button" className="column-trigger" aria-haspopup="true" aria-expanded={open} onClick={() => setOpen((current) => !current)}>{all ? "Усі партнери" : `Обрано ${selected.length}`}</button>
+    <button type="button" className="column-trigger" aria-haspopup="true" aria-expanded={open} onClick={() => setOpen((current) => !current)}>{all ? "Усі партнери" : `Обрано ${availableSelection.length}`}</button>
     <div className="column-popover" role="group" aria-label="Видимі колонки партнерів" hidden={!open}>
       <div className="column-actions">
         <button type="button" className="select-all" onClick={() => onChange(null)}>Обрати всіх</button>

@@ -32,4 +32,9 @@ describe("mobile partner feed", () => {
     expect(html).toContain("<select");
     expect(html).toContain("Comfy");
   });
+  it("clears a previously stored partner that is no longer available", () => {
+    const html = renderToStaticMarkup(<MobilePartnerFeed promos={promos} partners={["Rozetka"]} selectedPartner="Comfy" pendingOnly={false} onPartnerChange={vi.fn()} onSelect={vi.fn()} />);
+    expect(html).toContain("Оберіть партнера");
+    expect(html).not.toContain("Promo other");
+  });
 });

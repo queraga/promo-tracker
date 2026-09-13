@@ -15,11 +15,12 @@ export function getPartnerFeed(promos: PromoDto[], partnerName: string, pendingO
 }
 
 export function MobilePartnerFeed({ promos, partners, selectedPartner, pendingOnly, onPartnerChange, onSelect }: Props) {
-  const feed = getPartnerFeed(promos, selectedPartner, pendingOnly);
+  const availablePartner = partners.includes(selectedPartner) ? selectedPartner : "";
+  const feed = getPartnerFeed(promos, availablePartner, pendingOnly);
   return <section className="mobile-feed" aria-label="Промо вибраного партнера">
-    <label className="mobile-partner-select"><span>Партнер</span><select value={selectedPartner} onChange={(event) => onPartnerChange(event.target.value)}><option value="">Оберіть партнера</option>{partners.map((partner) => <option key={partner}>{partner}</option>)}</select></label>
-    {!selectedPartner ? <div className="mobile-empty"><strong>Оберіть партнера</strong><span>Після вибору тут з’являться його промоактивності.</span></div> : feed.length === 0 ? <div className="mobile-empty"><strong>Промо не знайдено</strong><span>{pendingOnly ? "Для цього партнера немає звітів, що очікуються." : "Для цього партнера ще немає промо."}</span></div> : <div className="promo-feed">{feed.map((promo) => {
-      const relation = promo.partners.find((partner) => partner.partnerName === selectedPartner)!;
+    <label className="mobile-partner-select"><span>Партнер</span><select value={availablePartner} onChange={(event) => onPartnerChange(event.target.value)}><option value="">Оберіть партнера</option>{partners.map((partner) => <option key={partner}>{partner}</option>)}</select></label>
+    {!availablePartner ? <div className="mobile-empty"><strong>Оберіть партнера</strong><span>Після вибору тут з’являться його промоактивності.</span></div> : feed.length === 0 ? <div className="mobile-empty"><strong>Промо не знайдено</strong><span>{pendingOnly ? "Для цього партнера немає звітів, що очікуються." : "Для цього партнера ще немає промо."}</span></div> : <div className="promo-feed">{feed.map((promo) => {
+      const relation = promo.partners.find((partner) => partner.partnerName === availablePartner)!;
       const report = relation.reportReceived ? "✓ Звіт отримано" : promo.status === "finished" ? "⚠ Очікується звіт" : "Звіт ще не очікується";
       return <button type="button" className="promo-card" key={promo.id} onClick={() => onSelect(promo.id)}>
         <span className="promo-card-top"><strong>{promo.lob}</strong><span className={`badge ${promo.status}`}>{labels[promo.status]}</span></span>

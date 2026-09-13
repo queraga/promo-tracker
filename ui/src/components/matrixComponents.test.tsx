@@ -21,6 +21,7 @@ describe("desktop matrix components", () => {
     expect(all).toContain("Очистити");
     expect(renderToStaticMarkup(<PartnerColumnSelector partners={["Rozetka", "Comfy"]} selected={["Comfy"]} onChange={vi.fn()} />)).toContain("Обрано 1");
     expect(renderToStaticMarkup(<PartnerColumnSelector partners={["Rozetka", "Comfy"]} selected={[]} onChange={vi.fn()} />)).toContain("Обрано 0");
+    expect(renderToStaticMarkup(<PartnerColumnSelector partners={["Rozetka"]} selected={["Rozetka", "Removed Partner"]} onChange={vi.fn()} />)).toContain("Обрано 1");
   });
   it("keeps a valid context-only table with zero partner columns", () => {
     const html = renderToStaticMarkup(<TrackerTable promos={[promo]} partners={[]} onSelect={vi.fn()} />);

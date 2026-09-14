@@ -94,7 +94,10 @@ export default function App() {
         {user.role === "SUPERUSER" && <button className={page === "users" ? "active" : ""} onClick={() => { setPage("users"); setSelected(null); }}>Користувачі</button>}
       </nav>
       <div className="account"><span>{user.email}</span><small>{user.role}</small><button onClick={signOut}>Вийти</button></div>
-      <p>Telegram — канал додавання промо</p>
+      <a className="telegram-link" href="https://t.me/promo_tracker_kam_bot" target="_blank" rel="noreferrer">
+        <span>Telegram — канал додавання промо</span>
+        <strong>Promo Tracker v1.0 →</strong>
+      </a>
     </aside>
     <main>
       {page === "users" && user.role === "SUPERUSER" ? <UserManagement currentUser={user} onCurrentUserChange={updateCurrentUser} onError={setError} /> : <>

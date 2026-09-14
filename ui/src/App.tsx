@@ -8,7 +8,7 @@ import { UserManagement } from "./components/UserManagement";
 import { deletePromo, getCurrentUser, getPartners, getPromo, getPromos, logout, removePromoPartner, updateReportStatus } from "./shared/api/client";
 import { removePartnerFromState, removePromoFromState } from "./shared/lib/admin";
 import { filterPromos, getPartnerColumns, getVisiblePartnerColumns, sortPromos } from "./shared/lib/tracker";
-import { readMobilePartner, readPartnerColumns, writeMobilePartner, writePartnerColumns } from "./shared/lib/preferences";
+import { readMobilePartner, readPartnerColumns, reconcileMobilePartner, reconcilePartnerColumns, reconcilePartnerFilter, writeMobilePartner, writePartnerColumns } from "./shared/lib/preferences";
 import type { CurrentUser, Filters, ManagedUser, PromoDto } from "./types";
 
 const initialFilters: Filters = { search: "", lob: "", status: "", partner: "" };
@@ -53,6 +53,13 @@ export default function App() {
   if (!user) return <LoginPage onLogin={(current) => { setUser(current); void loadWorkspace(current); }} />;
 
   const selectPromo = async (id: string) => { try { setSelected(await getPromo(id)); } catch (reason) { setError((reason as Error).message); } };
+  const refreshPartners = async () => {
+    const available = await getPartners();
+    setPartners(available);
+    setSelectedPartners((current) => reconcilePartnerColumns(window.localStorage, user.id, current, available));
+    setFilters((current) => ({ ...current, partner: reconcilePartnerFilter(current.partner, available) }));
+    setMobilePartner((current) => reconcileMobilePartner(window.localStorage, user.id, current, available));
+  };
   const toggleReport = async (id: string, received: boolean) => {
     setBusyId(id);
     try {
@@ -65,12 +72,12 @@ export default function App() {
   };
   const removePartner = async (promo: PromoDto, partnerId: string, partnerName: string) => {
     if (!window.confirm(`Видалити ${partnerName} з промо “${promo.name}”? Сам партнер залишиться в базі.`)) return;
-    try { await removePromoPartner(promo.id, partnerId); setPromos((current) => removePartnerFromState(current, promo.id, partnerId)); setSelected((current) => current ? removePartnerFromState([current], promo.id, partnerId)[0] : null); }
+    try { await removePromoPartner(promo.id, partnerId); setPromos((current) => removePartnerFromState(current, promo.id, partnerId)); setSelected((current) => current ? removePartnerFromState([current], promo.id, partnerId)[0] : null); await refreshPartners(); }
     catch (reason) { setError((reason as Error).message); }
   };
   const removePromo = async (promo: PromoDto) => {
     if (!window.confirm(`Видалити промо “${promo.name}”? Усі пов’язані звіти партнерів також буде видалено.`)) return;
-    try { await deletePromo(promo.id); setPromos((current) => removePromoFromState(current, promo.id)); setSelected(null); }
+    try { await deletePromo(promo.id); setPromos((current) => removePromoFromState(current, promo.id)); setSelected(null); await refreshPartners(); }
     catch (reason) { setError((reason as Error).message); }
   };
   const showAll = () => { setPage("tracker"); setPendingOnly(false); setFilters(initialFilters); };

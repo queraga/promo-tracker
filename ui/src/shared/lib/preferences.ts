@@ -18,6 +18,16 @@ export function writePartnerColumns(storage: PreferenceStorage, userId: number, 
   } catch { /* Browser storage may be disabled. The in-memory selection still works. */ }
 }
 
+export function reconcilePartnerColumns(storage: PreferenceStorage, userId: number, selected: string[] | null, available: string[]): string[] | null {
+  const reconciled = selected?.filter((partner) => available.includes(partner)) ?? null;
+  writePartnerColumns(storage, userId, reconciled);
+  return reconciled;
+}
+
+export function reconcilePartnerFilter(selected: string, available: string[]): string {
+  return !selected || available.includes(selected) ? selected : "";
+}
+
 export function readMobilePartner(storage: PreferenceStorage, userId: number, available: string[]): string {
   try {
     const selected = storage.getItem(mobilePartnerKey(userId)) ?? "";
@@ -30,4 +40,10 @@ export function writeMobilePartner(storage: PreferenceStorage, userId: number, s
     if (selected) storage.setItem(mobilePartnerKey(userId), selected);
     else storage.removeItem(mobilePartnerKey(userId));
   } catch { /* Browser storage may be disabled. */ }
+}
+
+export function reconcileMobilePartner(storage: PreferenceStorage, userId: number, selected: string, available: string[]): string {
+  const reconciled = available.includes(selected) ? selected : "";
+  writeMobilePartner(storage, userId, reconciled);
+  return reconciled;
 }

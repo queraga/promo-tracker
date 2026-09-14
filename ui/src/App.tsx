@@ -14,6 +14,22 @@ import type { CurrentUser, Filters, ManagedUser, PromoDto } from "./types";
 const initialFilters: Filters = { search: "", lob: "", status: "", partner: "" };
 type Page = "tracker" | "users";
 
+export function SidebarNavigation({ role, page, pendingOnly, pending, onOverview, onPending, onUsers }: { role: CurrentUser["role"]; page: Page; pendingOnly: boolean; pending: number; onOverview: () => void; onPending: () => void; onUsers: () => void }) {
+  return <nav aria-label="Основна навігація">
+    <button className={page === "tracker" && !pendingOnly ? "active" : ""} onClick={onOverview}>Огляд</button>
+    <button className={page === "tracker" && pendingOnly ? "active" : ""} onClick={onPending}>Очікуються звіти <em>{pending}</em></button>
+    {role === "SUPERUSER" && <button className={page === "users" ? "active" : ""} onClick={onUsers}>Користувачі</button>}
+  </nav>;
+}
+
+export function DashboardSummary({ promos, pending }: { promos: PromoDto[]; pending: number }) {
+  return <div className="summary">
+    <div><span>Всього промо</span><strong>{promos.length}</strong></div>
+    <div><span>Активні</span><strong>{promos.filter((promo) => promo.status === "active").length}</strong></div>
+    <div><span>Очікуються звіти</span><strong>{pending}</strong></div>
+  </div>;
+}
+
 export default function App() {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -93,13 +109,7 @@ export default function App() {
   return <div className="shell">
     <aside className="sidebar">
       <div className="brand"><span>PT</span>Promo Tracker</div>
-      <nav aria-label="Основна навігація">
-        <button className={page === "tracker" && !pendingOnly ? "active" : ""} onClick={showAll}>Огляд</button>
-        <button onClick={showAll}>Усі промо</button>
-        <button className={page === "tracker" && pendingOnly ? "active" : ""} onClick={() => { setPage("tracker"); setPendingOnly(true); setFilters(initialFilters); }}>Очікуються звіти <em>{pending}</em></button>
-        <button onClick={showAll}>Партнери</button>
-        {user.role === "SUPERUSER" && <button className={page === "users" ? "active" : ""} onClick={() => { setPage("users"); setSelected(null); }}>Користувачі</button>}
-      </nav>
+      <SidebarNavigation role={user.role} page={page} pendingOnly={pendingOnly} pending={pending} onOverview={showAll} onPending={() => { setPage("tracker"); setPendingOnly(true); setFilters(initialFilters); }} onUsers={() => { setPage("users"); setSelected(null); }} />
       <div className="account"><span>{user.email}</span><small>{user.role}</small><button onClick={signOut}>Вийти</button></div>
       <a className="telegram-link" href="https://t.me/promo_tracker_kam_bot" target="_blank" rel="noreferrer">
         <span>Telegram — канал додавання промо</span>
@@ -108,7 +118,7 @@ export default function App() {
     </aside>
     <main>
       {page === "users" && user.role === "SUPERUSER" ? <UserManagement currentUser={user} onCurrentUserChange={updateCurrentUser} onError={setError} /> : <>
-        <header className="page-header"><div><span className="eyebrow">Робочий простір KAM</span><h1>Promo Tracker</h1><p>Промоактивності та звіти партнерів</p></div><div className="summary"><div><span>Активні</span><strong>{promos.filter((promo) => promo.status === "active").length}</strong></div><div><span>Заплановані</span><strong>{promos.filter((promo) => promo.status === "planned").length}</strong></div><div><span>Очікуються звіти</span><strong>{pending}</strong></div></div></header>
+        <header className="page-header"><div><span className="eyebrow">Робочий простір KAM</span><h1>Promo Tracker</h1><p>Промоактивності та звіти партнерів</p></div><DashboardSummary promos={promos} pending={pending} /></header>
         <TrackerToolbar filters={filters} setFilters={setFilters} lobs={[...new Set(promos.map((promo) => promo.lob))].sort()} partners={knownPartners} selectedPartners={selectedPartners} setSelectedPartners={updateSelectedPartners} />
         {loading ? <div className="empty">Завантаження…</div> : <>{promos.length === 0 ? <div className="empty desktop-empty">Промо ще не додані.</div> : <TrackerTable promos={visiblePromos} partners={visiblePartners} onSelect={selectPromo} />}<MobilePartnerFeed promos={filteredPromos} partners={knownPartners} selectedPartner={mobilePartner} pendingOnly={pendingOnly} onPartnerChange={updateMobilePartner} onSelect={selectPromo} /></>}
       </>}

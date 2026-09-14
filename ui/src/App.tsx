@@ -7,7 +7,7 @@ import { TrackerToolbar } from "./components/TrackerToolbar";
 import { UserManagement } from "./components/UserManagement";
 import { deletePromo, getCurrentUser, getPartners, getPromo, getPromos, logout, removePromoPartner, updateReportStatus } from "./shared/api/client";
 import { removePartnerFromState, removePromoFromState } from "./shared/lib/admin";
-import { filterPromos, getPartnerColumns, getVisiblePartnerColumns, sortPromos } from "./shared/lib/tracker";
+import { countPendingReports, filterPromos, getPartnerColumns, getVisiblePartnerColumns, sortPromos } from "./shared/lib/tracker";
 import { readMobilePartner, readPartnerColumns, reconcileMobilePartner, reconcilePartnerColumns, reconcilePartnerFilter, writeMobilePartner, writePartnerColumns } from "./shared/lib/preferences";
 import type { CurrentUser, Filters, ManagedUser, PromoDto } from "./types";
 
@@ -22,11 +22,11 @@ export function SidebarNavigation({ role, page, pendingOnly, pending, onOverview
   </nav>;
 }
 
-export function DashboardSummary({ promos, pending }: { promos: PromoDto[]; pending: number }) {
+export function DashboardSummary({ promos, partner }: { promos: PromoDto[]; partner: string }) {
   return <div className="summary">
     <div><span>Всього промо</span><strong>{promos.length}</strong></div>
     <div><span>Активні</span><strong>{promos.filter((promo) => promo.status === "active").length}</strong></div>
-    <div><span>Очікуються звіти</span><strong>{pending}</strong></div>
+    <div><span>Очікуються звіти</span><strong>{countPendingReports(promos, partner)}</strong></div>
   </div>;
 }
 
@@ -63,7 +63,7 @@ export default function App() {
   const visiblePartners = useMemo(() => getVisiblePartnerColumns(knownPartners, selectedPartners), [knownPartners, selectedPartners]);
   const filteredPromos = useMemo(() => filterPromos(promos, filters), [promos, filters]);
   const visiblePromos = useMemo(() => sortPromos(pendingOnly ? filteredPromos.filter((promo) => promo.status === "finished" && promo.partners.some((partner) => !partner.reportReceived)) : filteredPromos), [filteredPromos, pendingOnly]);
-  const pending = promos.reduce((count, promo) => count + (promo.status === "finished" ? promo.partners.filter((partner) => !partner.reportReceived).length : 0), 0);
+  const pending = countPendingReports(promos);
 
   if (authLoading) return <main className="login-page">Завантаження…</main>;
   if (!user) return <LoginPage onLogin={(current) => { setUser(current); void loadWorkspace(current); }} />;
@@ -118,7 +118,7 @@ export default function App() {
     </aside>
     <main>
       {page === "users" && user.role === "SUPERUSER" ? <UserManagement currentUser={user} onCurrentUserChange={updateCurrentUser} onError={setError} /> : <>
-        <header className="page-header"><div><span className="eyebrow">Робочий простір KAM</span><h1>Promo Tracker</h1><p>Промоактивності та звіти партнерів</p></div><DashboardSummary promos={promos} pending={pending} /></header>
+        <header className="page-header"><div><span className="eyebrow">Робочий простір KAM</span><h1>Promo Tracker</h1><p>Промоактивності та звіти партнерів</p></div><DashboardSummary promos={visiblePromos} partner={filters.partner} /></header>
         <TrackerToolbar filters={filters} setFilters={setFilters} lobs={[...new Set(promos.map((promo) => promo.lob))].sort()} partners={knownPartners} selectedPartners={selectedPartners} setSelectedPartners={updateSelectedPartners} />
         {loading ? <div className="empty">Завантаження…</div> : <>{promos.length === 0 ? <div className="empty desktop-empty">Промо ще не додані.</div> : <TrackerTable promos={visiblePromos} partners={visiblePartners} onSelect={selectPromo} />}<MobilePartnerFeed promos={filteredPromos} partners={knownPartners} selectedPartner={mobilePartner} pendingOnly={pendingOnly} onPartnerChange={updateMobilePartner} onSelect={selectPromo} /></>}
       </>}

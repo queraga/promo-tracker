@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PromoDto } from "../../types";
-import { filterPromos, getPartnerCellState, getPartnerColumns, getVisiblePartnerColumns, sortPromos } from "./tracker";
+import { countPendingReports, filterPromos, getPartnerCellState, getPartnerColumns, getVisiblePartnerColumns, sortPromos } from "./tracker";
 const promo = (id: string, status: PromoDto["status"], lob: string, name: string, partnerName: string): PromoDto => ({ id, status, lob, name, startDate: `2026-09-0${id}T00:00:00.000Z`, endDate: "2026-09-13T00:00:00.000Z", partners: [{ promoPartnerId: `r-${id}`, partnerId: `p-${id}`, partnerName, reportReceived: false, reportReceivedAt: null, rawEmailSubject: name }] });
 const promos = [promo("1", "finished", "AW", "Watch campaign", "Rozetka"), promo("2", "planned", "Mac iPad", "Back to School", "MOYO"), promo("3", "active", "iPhone", "September Phone", "Foxtrot")];
 const empty = { search: "", lob: "", status: "", partner: "" };
@@ -15,6 +15,8 @@ describe("tracker UI logic", () => {
   it("filters by LOB", () => expect(filterPromos(promos, { ...empty, lob: "AW" }).map((item) => item.id)).toEqual(["1"]));
   it("filters by status", () => expect(filterPromos(promos, { ...empty, status: "active" }).map((item) => item.id)).toEqual(["3"]));
   it("filters by partner", () => expect(filterPromos(promos, { ...empty, partner: "MOYO" }).map((item) => item.id)).toEqual(["2"]));
+  it("counts pending reports in the filtered promo set", () => expect(countPendingReports(promos)).toBe(1));
+  it("counts pending reports only for the selected partner", () => expect(countPendingReports(promos, "MOYO")).toBe(0));
   it("finished missing is pending", () => expect(getPartnerCellState("finished", promos[0].partners[0])).toBe("pending"));
   it("finished received is green", () => expect(getPartnerCellState("finished", { ...promos[0].partners[0], reportReceived: true })).toBe("received"));
   it("active missing is not pending", () => expect(getPartnerCellState("active", promos[0].partners[0])).toBe("participating"));

@@ -3,15 +3,21 @@ import { describe, expect, it, vi } from "vitest";
 import { DashboardSummary, SidebarNavigation } from "../App";
 import type { PromoDto, PromoStatus } from "../types";
 
-const promo = (id: string, status: PromoStatus): PromoDto => ({ id, status, lob: "AW", name: `Promo ${id}`, startDate: "2026-09-01", endDate: "2026-09-02", partners: [] });
+const promo = (id: string, status: PromoStatus, partnerName = "Rozetka", reportReceived = false): PromoDto => ({ id, status, lob: "AW", name: `Promo ${id}`, startDate: "2026-09-01", endDate: "2026-09-02", partners: [{ promoPartnerId: `relation-${id}-${partnerName}`, partnerId: `partner-${partnerName}`, partnerName, reportReceived, reportReceivedAt: null, rawEmailSubject: `Promo ${id}` }] });
 const navigation = (role: "USER" | "SUPERUSER") => renderToStaticMarkup(<SidebarNavigation role={role} page="tracker" pendingOnly={false} pending={2} onOverview={vi.fn()} onPending={vi.fn()} onUsers={vi.fn()} />);
 
 describe("dashboard summary and navigation", () => {
   it("shows total promos, active promos and pending reports in order", () => {
-    const html = renderToStaticMarkup(<DashboardSummary promos={[promo("1", "active"), promo("2", "planned"), promo("3", "finished")]} pending={2} />);
-    expect(html).toMatch(/Всього промо<\/span><strong>3.*Активні<\/span><strong>1.*Очікуються звіти<\/span><strong>2/);
+    const html = renderToStaticMarkup(<DashboardSummary promos={[promo("1", "active"), promo("2", "planned"), promo("3", "finished")]} partner="" />);
+    expect(html).toMatch(/Всього промо<\/span><strong>3.*Активні<\/span><strong>1.*Очікуються звіти<\/span><strong>1/);
     expect(html).not.toContain("Заплановані");
     expect((html.match(/<div>/g) ?? [])).toHaveLength(3);
+  });
+
+  it("recalculates counters for a filtered promo set and selected partner", () => {
+    const filtered = [promo("1", "active"), promo("2", "finished"), promo("3", "finished", "MOYO"), promo("4", "finished", "Rozetka", true)];
+    const html = renderToStaticMarkup(<DashboardSummary promos={filtered} partner="Rozetka" />);
+    expect(html).toMatch(/Всього промо<\/span><strong>4.*Активні<\/span><strong>1.*Очікуються звіти<\/span><strong>1/);
   });
 
   it("keeps only the approved tracker navigation items for SUPERUSER", () => {

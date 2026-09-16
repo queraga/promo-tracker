@@ -1,6 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
   <title id="title">Promo Tracker Telegram bot avatar</title>
+  <desc id="description">Open rounded status square with a green checkmark on a light background</desc>
   <rect width="1024" height="1024" rx="220" fill="#F8FAFC"/>
-  <path d="M604 252H356c-80 0-144 64-144 144v264c0 80 64 144 144 144h264" fill="none" stroke="#0F172A" stroke-width="84" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="m430 516 126 126 260-316" fill="none" stroke="#22C55E" stroke-width="96" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(160 160) scale(11)">
+    <path d="M54 21v-2a9 9 0 0 0-9-9H19a9 9 0 0 0-9 9v26a9 9 0 0 0 9 9h26a9 9 0 0 0 9-9v-4" fill="none" stroke="#0F172A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="m26 32 10 10 22-24" fill="none" stroke="#22C55E" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
 </svg>

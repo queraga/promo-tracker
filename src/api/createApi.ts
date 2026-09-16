@@ -3,7 +3,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { type NextFunction, type Request, type RequestHandler, type Response } from "express";
 import path from "node:path";
-import { authenticateUser, findUserByEmail, findUserById, signAuthToken, toSafeUser } from "../features/auth/authService.js";
+import { AUTH_SESSION_MAX_AGE_MS, authenticateUser, findUserByEmail, findUserById, signAuthToken, toSafeUser } from "../features/auth/authService.js";
 import { AUTH_COOKIE, requireAuth, requireRole } from "../features/auth/authMiddleware.js";
 import { createManagedUser, LastActiveSuperuserError, listUsers, updateManagedUser, updateManagedUserPassword, type ManagedUser, type UserAdminUpdate } from "../features/auth/userAdmin.js";
 import { deletePromo, removePromoPartner } from "../features/promoAdmin/deletePromo.js";
@@ -30,7 +30,7 @@ export function createApi(overrides: Partial<ApiDependencies> = {}) {
   app.use(express.json());
   app.use(cookieParser());
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
-  app.post("/api/auth/login", async (req, res, next) => { try { if (typeof req.body?.email !== "string" || typeof req.body?.password !== "string") { res.status(400).json({ error: "Email і password обов'язкові" }); return; } const user = await authenticateUser(req.body.email, req.body.password, services.findUserByEmail); if (!user) { res.status(401).json({ error: "Невірний email або пароль" }); return; } res.cookie(AUTH_COOKIE, signAuthToken(user, jwtSecret), { ...cookieOptions, maxAge: 12 * 60 * 60 * 1000 }); res.json(toSafeUser(user)); } catch (error) { next(error); } });
+  app.post("/api/auth/login", async (req, res, next) => { try { if (typeof req.body?.email !== "string" || typeof req.body?.password !== "string") { res.status(400).json({ error: "Email і password обов'язкові" }); return; } const user = await authenticateUser(req.body.email, req.body.password, services.findUserByEmail); if (!user) { res.status(401).json({ error: "Невірний email або пароль" }); return; } res.cookie(AUTH_COOKIE, signAuthToken(user, jwtSecret), { ...cookieOptions, maxAge: AUTH_SESSION_MAX_AGE_MS }); res.json(toSafeUser(user)); } catch (error) { next(error); } });
   app.post("/api/auth/logout", (_req, res) => { res.clearCookie(AUTH_COOKIE, cookieOptions); res.json({ success: true }); });
   const authenticated = requireAuth(jwtSecret, services.findUserById);
   const superuserOnly: RequestHandler[] = [authenticated, requireRole("SUPERUSER")];

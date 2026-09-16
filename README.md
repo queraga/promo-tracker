@@ -2,7 +2,7 @@
 
 ## Authentication behavior
 
-Protected requests reload the current user, so deactivating an account blocks its existing sessions immediately. Resetting a password changes future login credentials but does not revoke an existing JWT; that session remains valid until its 12-hour expiry unless the account is deactivated.
+Protected requests reload the current user, so deactivating an account blocks its existing sessions immediately. Resetting a password changes future login credentials but does not revoke an existing JWT; that session remains valid until its 30-day expiry unless the account is deactivated.
 
 ## Local M4 setup
 
@@ -25,7 +25,7 @@ The bot fails at startup with a clear error when `TELEGRAM_BOT_TOKEN` is missing
 
 ## Authentication
 
-The Admin UI uses a 12-hour JWT stored in an HttpOnly, SameSite=Lax cookie. There is no public signup. `USER` can view the tracker and update report state; `SUPERUSER` can additionally delete a promo or remove one partner association. Promo deletion also removes its PromoPartner rows but preserves Partner records.
+The Admin UI uses a 30-day JWT stored in an HttpOnly, SameSite=Lax cookie with a matching 30-day browser lifetime. There is no public signup. `USER` can view the tracker and update report state; `SUPERUSER` can additionally delete a promo or remove one partner association. Promo deletion also removes its PromoPartner rows but preserves Partner records.
 
 Create users manually (the password prompt is not stored or printed):
 

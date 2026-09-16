@@ -1,7 +1,9 @@
 import type { Partner, Promo, PromoPartner, User } from "@prisma/client";
+import jwt, { type JwtPayload } from "jsonwebtoken";
 import request from "supertest";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { createApi, type ApiDependencies } from "../src/api/createApi.js";
+import { AUTH_SESSION_SECONDS } from "../src/features/auth/authService.js";
 import { hashPassword } from "../src/features/auth/password.js";
 
 const secret = "test-secret-that-is-at-least-32-characters"; const createdAt = new Date("2026-09-01T00:00:00Z"); let passwordHash = "";
@@ -13,6 +15,7 @@ async function loginAgent(user: User, overrides: Partial<ApiDependencies> = {}) 
 
 describe("authentication API", () => {
   it("logs in an active user and never returns passwordHash", async () => { const user = makeUser(); const response = await request(createApi(deps(user))).post("/api/auth/login").send({ email: user.email, password: "correct-password" }); expect(response.status).toBe(200); expect(response.body).toEqual({ id: 1, email: user.email, role: "USER" }); expect(JSON.stringify(response.body)).not.toContain("passwordHash"); expect(response.headers["set-cookie"][0]).toContain("HttpOnly"); });
+  it("sets matching 30-day cookie and JWT lifetimes", async () => { const user = makeUser(); const response = await request(createApi(deps(user))).post("/api/auth/login").send({ email: user.email, password: "correct-password" }); const cookie = response.headers["set-cookie"][0]; expect(cookie).toContain(`Max-Age=${AUTH_SESSION_SECONDS}`); const token = cookie.match(/^promo_tracker_session=([^;]+)/)?.[1]; const payload = jwt.decode(token ?? "") as JwtPayload | null; expect(payload?.exp && payload.iat ? payload.exp - payload.iat : 0).toBe(AUTH_SESSION_SECONDS); });
   it("rejects a wrong password", async () => { const user = makeUser(); expect((await request(createApi(deps(user))).post("/api/auth/login").send({ email: user.email, password: "wrong-password" })).status).toBe(401); });
   it("rejects an unknown user", async () => expect((await request(createApi(deps(null))).post("/api/auth/login").send({ email: "missing@example.com", password: "correct-password" })).status).toBe(401));
   it("rejects an inactive user login", async () => { const user = makeUser("USER", false); expect((await request(createApi(deps(user))).post("/api/auth/login").send({ email: user.email, password: "correct-password" })).status).toBe(401); });

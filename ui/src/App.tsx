@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { LoginPage } from "./components/LoginPage";
 import { MobilePartnerFeed } from "./components/MobilePartnerFeed";
+import { ProductBrand } from "./components/ProductBrand";
 import { PromoDrawer } from "./components/PromoDrawer";
 import { TrackerTable } from "./components/TrackerTable";
 import { TrackerToolbar } from "./components/TrackerToolbar";
@@ -108,7 +109,7 @@ export default function App() {
 
   return <div className="shell">
     <aside className="sidebar">
-      <div className="brand"><span>PT</span>Promo Tracker</div>
+      <ProductBrand />
       <SidebarNavigation role={user.role} page={page} pendingOnly={pendingOnly} pending={pending} onOverview={showAll} onPending={() => { setPage("tracker"); setPendingOnly(true); setFilters(initialFilters); }} onUsers={() => { setPage("users"); setSelected(null); }} />
       <div className="account"><span>{user.email}</span><small>{user.role}</small><button onClick={signOut}>Вийти</button></div>
       <a className="telegram-link" href="https://t.me/promo_tracker_kam_bot" target="_blank" rel="noreferrer">

@@ -51,12 +51,49 @@ describe("parsePromoSubject", () => {
     });
   });
 
+  it("parses the production Accessories subject with reply prefix and trailing offer metadata", () => {
+    const subject = "Re: Нова лінійка NPI Accessories Apple - Rozetka (Offer & Split) - 25.09 - 27.09";
+    const result = parsePromoSubject(subject, now);
+
+    expect(result).toMatchObject({
+      lob: "Accessories",
+      partner: "Rozetka",
+      startDate: "2026-09-25",
+      endDate: "2026-09-27",
+      isValid: true,
+    });
+    expect(result.warnings).not.toContain("LOB could not be detected");
+    expect(result.warnings).not.toContain("Partner could not be detected");
+  });
+
+  it.each([
+    "Нова лінійка NPI Accessories Apple - Rozetka (Offer & Split) - 25.09 - 27.09",
+    "RE: Нова лінійка NPI accessories Apple - ROZETKA (Offer & Split) - 25.09 - 27.09",
+  ])("recognizes Accessories and Rozetka across prefix and case variants: %s", (subject) => {
+    expect(parsePromoSubject(subject, now)).toMatchObject({
+      lob: "Accessories",
+      partner: "Rozetka",
+      startDate: "2026-09-25",
+      endDate: "2026-09-27",
+      warnings: [],
+    });
+  });
+
   it.each(["allo", "Allo", "ALLO", "Алло"])("keeps one canonical value across capitalization: %s", (alias) => {
     expect(parsePromoSubject(`Promo iPhone 07.09-13.09 - ${alias}`, now).partner).toBe("ALLO");
   });
 
   it.each(["Allotment", "MegaBrain", "Citrusade", "Epicentral"])("does not match partner-like substring: %s", (suffix) => {
     const result = parsePromoSubject(`Promo iPhone 07.09-13.09 - ${suffix}`, now);
+    expect(result.partner).toBeNull();
+    expect(result.warnings).toContain("Partner could not be detected");
+  });
+
+  it("keeps partner boundaries for a structured segment before the period", () => {
+    const result = parsePromoSubject(
+      "NPI Accessories launch - MegaBrain (Offer & Split) - 25.09 - 27.09",
+      now,
+    );
     expect(result.partner).toBeNull();
     expect(result.warnings).toContain("Partner could not be detected");
   });

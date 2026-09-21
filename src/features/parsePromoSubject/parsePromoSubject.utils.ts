@@ -105,6 +105,13 @@ function findPartnerMatch(subject: string): PartnerMatch | null {
       );
       const match = suffix.exec(subject);
       if (match) return { canonical, index: match.index };
+
+      const beforeTrailingPeriod = new RegExp(
+        String.raw`(?:^|\s[-–]\s)${phrase}(?=$|[^\p{L}\p{N}])(?:\s*\([^)]*\))?\s*[-–]\s*(?:(?:період|period)\s*)?\(?\s*${DATE_RANGE_SOURCE}\s*\)?\s*$`,
+        "iu",
+      );
+      const structuredMatch = beforeTrailingPeriod.exec(subject);
+      if (structuredMatch) return { canonical, index: structuredMatch.index };
     }
   }
   return null;

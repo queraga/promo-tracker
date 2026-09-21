@@ -67,7 +67,7 @@ model PromoPartner {
   id               String   @id @default(cuid())
   promoId          String
   partnerId        String
-  rawEmailSubject  String
+  rawEmailSubject  String?
   reportReceived   Boolean  @default(false)
   reportReceivedAt DateTime?
   firstReminderSentAt  DateTime?

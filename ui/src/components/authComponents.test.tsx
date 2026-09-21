@@ -10,7 +10,7 @@ import type { CurrentUser, PromoDto } from "../types";
 
 const promo: PromoDto = { id: "promo-1", lob: "AW", name: "Test Promo", startDate: "2026-09-01", endDate: "2026-09-02", status: "finished", partners: [{ promoPartnerId: "relation-1", partnerId: "partner-1", partnerName: "Rozetka", reportReceived: false, reportReceivedAt: null, rawEmailSubject: "Test Promo" }] };
 const user = (role: CurrentUser["role"]): CurrentUser => ({ id: 1, email: "user@example.com", role });
-const drawer = (role: CurrentUser["role"]) => renderToStaticMarkup(<PromoDrawer promo={promo} user={user(role)} busyId={null} onClose={vi.fn()} onToggle={vi.fn()} onDeletePromo={vi.fn()} onRemovePartner={vi.fn()} />);
+const drawer = (role: CurrentUser["role"]) => renderToStaticMarkup(<PromoDrawer promo={promo} user={user(role)} busyId={null} onClose={vi.fn()} onToggle={vi.fn()} onDeletePromo={vi.fn()} onRemovePartner={vi.fn()} onExpanded={vi.fn()} onError={vi.fn()} />);
 
 describe("authentication components", () => {
   it("renders the branded internal-workspace login form", () => { const html = renderToStaticMarkup(<LoginPage onLogin={vi.fn()} />); expect(html).toContain("Вхід"); expect(html).toContain("Внутрішній робочий простір"); expect(html).toContain("Доступ і облікові дані надає адміністратор."); expect(html).toContain('/brand/promo-tracker-icon.svg'); expect(html).not.toContain(">PT<"); expect(html).toContain('type="email"'); expect(html).toContain('type="password"'); });

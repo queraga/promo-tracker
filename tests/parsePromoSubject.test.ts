@@ -58,12 +58,35 @@ describe("parsePromoSubject", () => {
     expect(result).toMatchObject({
       lob: "ACCY",
       partner: "Rozetka",
+      promoName: "Нова лінійка NPI Accessories Apple (Offer & Split)",
       startDate: "2026-09-25",
       endDate: "2026-09-27",
       isValid: true,
     });
     expect(result.warnings).not.toContain("LOB could not be detected");
     expect(result.warnings).not.toContain("Partner could not be detected");
+  });
+
+  it.each([
+    ["Re: Нова лінійка NPI Accessories Apple - kibernetiki (Offer & Split) - 25.09 - 27.09", "Kibernetiki"],
+    ["Нова лінійка NPI Accessories Apple - Rozetka (Offer & Split) - 25.09 - 27.09", "Rozetka"],
+  ])("builds a partner-neutral shared name while preserving offer metadata: %s", (subject, partner) => {
+    expect(parsePromoSubject(subject, now)).toMatchObject({
+      partner,
+      lob: "ACCY",
+      promoName: "Нова лінійка NPI Accessories Apple (Offer & Split)",
+      normalizedName: "нова лінійка npi accessories apple offer split",
+      startDate: "2026-09-25",
+      endDate: "2026-09-27",
+      warnings: [],
+    });
+  });
+
+  it("removes only the recognized trailing partner occurrence", () => {
+    expect(parsePromoSubject("Kibernetiki Edition iPhone Promo - Rozetka (Offer & Split) - 25.09-27.09", now)).toMatchObject({
+      partner: "Rozetka",
+      promoName: "Kibernetiki Edition iPhone Promo (Offer & Split)",
+    });
   });
 
   it.each([

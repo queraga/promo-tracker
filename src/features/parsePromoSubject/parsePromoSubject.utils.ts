@@ -86,7 +86,7 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-type PartnerMatch = { canonical: string; index: number };
+type PartnerMatch = { canonical: string; start: number; end: number };
 
 function normalizePartnerAlias(value: string): string {
   return value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
@@ -100,18 +100,24 @@ function findPartnerMatch(subject: string): PartnerMatch | null {
     for (const alias of normalizedAliases) {
       const phrase = alias.split(" ").map(escapeRegExp).join(String.raw`[^\p{L}\p{N}]+`);
       const suffix = new RegExp(
-        String.raw`(?:^|[^\p{L}\p{N}])${phrase}[^\p{L}\p{N}]*$`,
+        String.raw`(?:^|[^\p{L}\p{N}])(${phrase})[^\p{L}\p{N}]*$`,
         "iu",
       );
       const match = suffix.exec(subject);
-      if (match) return { canonical, index: match.index };
+      if (match) {
+        const offset = match[0].indexOf(match[1]);
+        return { canonical, start: match.index + offset, end: match.index + offset + match[1].length };
+      }
 
       const beforeTrailingPeriod = new RegExp(
-        String.raw`(?:^|\s[-–]\s)${phrase}(?=$|[^\p{L}\p{N}])(?:\s*\([^)]*\))?\s*[-–]\s*(?:(?:період|period)\s*)?\(?\s*${DATE_RANGE_SOURCE}\s*\)?\s*$`,
+        String.raw`(?:^|\s[-–]\s)(${phrase})(?=$|[^\p{L}\p{N}])(?:\s*\([^)]*\))?\s*[-–]\s*(?:(?:період|period)\s*)?\(?\s*${DATE_RANGE_SOURCE}\s*\)?\s*$`,
         "iu",
       );
       const structuredMatch = beforeTrailingPeriod.exec(subject);
-      if (structuredMatch) return { canonical, index: structuredMatch.index };
+      if (structuredMatch) {
+        const offset = structuredMatch[0].indexOf(structuredMatch[1]);
+        return { canonical, start: structuredMatch.index + offset, end: structuredMatch.index + offset + structuredMatch[1].length };
+      }
     }
   }
   return null;
@@ -141,16 +147,19 @@ export function detectLob(subject: string): Lob | null {
 export function buildPromoName(cleanedSubject: string, partner: string | null): string {
   let result = cleanedSubject;
 
+  if (partner) {
+    const match = findPartnerMatch(result);
+    if (match?.canonical === partner) {
+      const before = result.slice(0, match.start).replace(/\s+[-–]\s*$/u, " ");
+      result = before + result.slice(match.end);
+    }
+  }
+
   const periodWithDecoration = new RegExp(
     String.raw`(?:(?:період|period)\s*)?\(?\s*${DATE_RANGE_SOURCE}\s*\)?`,
     "giu",
   );
   result = result.replace(periodWithDecoration, " ");
-
-  if (partner) {
-    const match = findPartnerMatch(result);
-    if (match?.canonical === partner) result = result.slice(0, match.index);
-  }
 
   return result
     .replace(/\s+/gu, " ")

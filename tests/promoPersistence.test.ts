@@ -49,6 +49,14 @@ describe("promo persistence", () => {
     expect(await prisma.promoPartner.count()).toBe(2);
   });
 
+  it("reuses one neutral Promo for structured subjects received through different partners", async () => {
+    await createPromoFromParsedSubject(parsed("Нова лінійка NPI Accessories Apple - Kibernetiki (Offer & Split) - 25.09-27.09"));
+    await createPromoFromParsedSubject(parsed("Нова лінійка NPI Accessories Apple - iSpace (Offer & Split) - 25.09-27.09"));
+    expect(await prisma.promo.count()).toBe(1);
+    expect(await prisma.promoPartner.count()).toBe(2);
+    expect((await prisma.promo.findFirstOrThrow()).name).toBe("Нова лінійка NPI Accessories Apple (Offer & Split)");
+  });
+
   it("reuses a partner across different promos", async () => {
     await createPromoFromParsedSubject(parsed(iphoneRozetka));
     await createPromoFromParsedSubject(parsed("Promo AirPods Pro 3 07.09-13.09 - Rozetka"));

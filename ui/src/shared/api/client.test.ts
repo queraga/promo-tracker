@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createUser, deleteUser, getAdminPartners, replaceUserPartners } from "./client";
+import { addPromoPartners, createUser, deleteUser, getAdminPartners, getPromoPartnerOptions, replaceUserPartners } from "./client";
 
 const ok = (body: unknown) => ({ ok: true, json: async () => body });
 
@@ -29,5 +29,13 @@ describe("KAM assignment API client", () => {
     vi.stubGlobal("fetch", fetchMock);
     await deleteUser(17);
     expect(fetchMock).toHaveBeenCalledWith("/api/users/17", expect.objectContaining({ method: "DELETE" }));
+  });
+  it("loads expansion options and submits selected partner IDs", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(ok([]));
+    vi.stubGlobal("fetch", fetchMock);
+    await getPromoPartnerOptions("promo-1");
+    await addPromoPartners("promo-1", ["partner-2", "partner-3"]);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/promos/promo-1/partner-options");
+    expect(fetchMock.mock.calls[1]).toEqual(["/api/promos/promo-1/partners", expect.objectContaining({ method: "POST", body: JSON.stringify({ partnerIds: ["partner-2", "partner-3"] }) })]);
   });
 });

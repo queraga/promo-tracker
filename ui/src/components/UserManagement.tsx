@@ -27,13 +27,13 @@ export function UserManagement({ currentUser, onCurrentUserChange, onError }: Pr
   const [busyId, setBusyId] = useState<number | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<CurrentUser["role"]>("USER");
+  const [role, setRole] = useState<CurrentUser["role"]>("KAM");
   const load = () => getUsers().then(setUsers).catch((reason) => onError((reason as Error).message)).finally(() => setLoading(false));
   useEffect(() => { void load(); }, []);
 
   const create = async (event: FormEvent) => {
     event.preventDefault();
-    try { const user = await createUser(email, password, role); setUsers((current) => [...current, user].sort((a, b) => a.email.localeCompare(b.email))); setEmail(""); setPassword(""); setRole("USER"); }
+    try { const user = await createUser(email, password, role); setUsers((current) => [...current, user].sort((a, b) => a.email.localeCompare(b.email))); setEmail(""); setPassword(""); setRole("KAM"); }
     catch (reason) { onError((reason as Error).message); }
   };
   const change = async (user: ManagedUser, update: { role?: CurrentUser["role"]; isActive?: boolean }) => {
@@ -49,12 +49,12 @@ export function UserManagement({ currentUser, onCurrentUserChange, onError }: Pr
       <h3>Новий користувач</h3>
       <label><span>Email</span><input type="email" required autoComplete="off" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
       <label><span>Тимчасовий пароль</span><input type="password" minLength={8} required autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-      <label><span>Роль</span><select value={role} onChange={(event) => setRole(event.target.value as CurrentUser["role"])}><option value="USER">USER</option><option value="SUPERUSER">SUPERUSER</option></select></label>
+      <label><span>Роль</span><select value={role} onChange={(event) => setRole(event.target.value as CurrentUser["role"])}><option value="KAM">KAM</option><option value="SUPERUSER">SUPERUSER</option></select></label>
       <button type="submit">Створити користувача</button>
     </form>
     {loading ? <div className="empty">Завантаження…</div> : <div className="user-list">{users.map((user) => <article className={`user-card${user.isActive ? "" : " inactive"}`} key={user.id}>
       <div className="user-identity"><strong>{user.email}</strong><span>{user.isActive ? "Активний" : "Деактивований"}{user.id === currentUser.id ? " · Ви" : ""}</span></div>
-      <label><span>Роль</span><select aria-label={`Роль ${user.email}`} disabled={busyId === user.id} value={user.role} onChange={(event) => void change(user, { role: event.target.value as CurrentUser["role"] })}><option value="USER">USER</option><option value="SUPERUSER">SUPERUSER</option></select></label>
+      <label><span>Роль</span><select aria-label={`Роль ${user.email}`} disabled={busyId === user.id} value={user.role} onChange={(event) => void change(user, { role: event.target.value as CurrentUser["role"] })}><option value="KAM">KAM</option><option value="SUPERUSER">SUPERUSER</option></select></label>
       <button className={user.isActive ? "deactivate" : "activate"} disabled={busyId === user.id} onClick={() => void change(user, { isActive: !user.isActive })}>{user.isActive ? "Деактивувати" : "Активувати"}</button>
       <PasswordReset user={user} onError={onError} />
     </article>)}</div>}

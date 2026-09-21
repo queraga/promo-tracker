@@ -14,7 +14,7 @@ const hiddenOutput = new HiddenOutput();
 const input = createInterface({ input: stdin, output: hiddenOutput, terminal: true });
 try {
   const email = process.argv[2] ?? await input.question("Email: ");
-  const role = (process.argv[3] ?? await input.question("Role (USER/SUPERUSER): ")).toUpperCase();
+  const role = (process.argv[3] ?? await input.question("Role (KAM/SUPERUSER): ")).toUpperCase();
   const passwordQuestion = input.question("Password: ");
   hiddenOutput.muted = true;
   const password = await passwordQuestion;

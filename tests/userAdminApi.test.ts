@@ -33,15 +33,15 @@ async function authenticatedAgent(user: User, overrides: Partial<ApiDependencies
 describe("user administration API", () => {
   it.each(["get", "post", "patch", "put"] as const)("rejects unauthenticated %s requests", async (method) => {
     const app = request(createApi(dependencies(makeUser("SUPERUSER", 1))));
-    const response = method === "get" ? await app.get("/api/users") : method === "post" ? await app.post("/api/users").send({}) : method === "patch" ? await app.patch("/api/users/2").send({ role: "USER" }) : await app.put("/api/users/2/password").send({ password: "new-password" });
+    const response = method === "get" ? await app.get("/api/users") : method === "post" ? await app.post("/api/users").send({}) : method === "patch" ? await app.patch("/api/users/2").send({ role: "KAM" }) : await app.put("/api/users/2/password").send({ password: "new-password" });
     expect(response.status).toBe(401);
   });
 
-  it("prevents USER from listing users", async () => expect((await (await authenticatedAgent(makeUser("USER", 1))).get("/api/users")).status).toBe(403));
+  it("prevents KAM from listing users", async () => expect((await (await authenticatedAgent(makeUser("KAM", 1))).get("/api/users")).status).toBe(403));
   it("rechecks a changed role on an existing session", async () => {
     const admin = makeUser("SUPERUSER", 1);
     const agent = await authenticatedAgent(admin);
-    admin.role = "USER";
+    admin.role = "KAM";
     expect((await agent.get("/api/users")).status).toBe(403);
   });
   it("allows SUPERUSER to list safe user records", async () => {
@@ -52,21 +52,21 @@ describe("user administration API", () => {
     expect(JSON.stringify(response.body)).not.toContain("passwordHash");
   });
   it("creates a user with a normalized service payload", async () => {
-    const created = toManagedUser(makeUser("USER", 2));
+    const created = toManagedUser(makeUser("KAM", 2));
     const create = vi.fn().mockResolvedValue(created);
     const agent = await authenticatedAgent(makeUser("SUPERUSER", 1), { createManagedUser: create });
-    const response = await agent.post("/api/users").send({ email: "new@example.com", password: "strong-password", role: "USER" });
+    const response = await agent.post("/api/users").send({ email: "new@example.com", password: "strong-password", role: "KAM" });
     expect(response.status).toBe(201);
-    expect(create).toHaveBeenCalledWith("new@example.com", "strong-password", "USER");
+    expect(create).toHaveBeenCalledWith("new@example.com", "strong-password", "KAM");
     expect(response.body).not.toHaveProperty("passwordHash");
   });
   it("updates role and active state", async () => {
-    const updated = { ...toManagedUser(makeUser("SUPERUSER", 2)), role: "USER" as const, isActive: false };
+    const updated = { ...toManagedUser(makeUser("SUPERUSER", 2)), role: "KAM" as const, isActive: false };
     const update = vi.fn().mockResolvedValue(updated);
     const agent = await authenticatedAgent(makeUser("SUPERUSER", 1), { updateManagedUser: update });
-    const response = await agent.patch("/api/users/2").send({ role: "USER", isActive: false });
+    const response = await agent.patch("/api/users/2").send({ role: "KAM", isActive: false });
     expect(response.status).toBe(200);
-    expect(update).toHaveBeenCalledWith(2, { role: "USER", isActive: false });
+    expect(update).toHaveBeenCalledWith(2, { role: "KAM", isActive: false });
   });
   it("resets a password", async () => {
     const reset = vi.fn().mockResolvedValue(true);
@@ -81,7 +81,7 @@ describe("user administration API", () => {
     expect(response.status).toBe(409);
   });
   it.each([
-    ["patch", "/api/users/nope", { role: "USER" }],
+    ["patch", "/api/users/nope", { role: "KAM" }],
     ["patch", "/api/users/2", { role: "ADMIN" }],
     ["patch", "/api/users/2", {}],
     ["put", "/api/users/2/password", {}],

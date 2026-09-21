@@ -6,7 +6,7 @@ import { AUTH_COOKIE } from "../src/features/auth/authMiddleware.js";
 import { signAuthToken } from "../src/features/auth/authService.js";
 
 const now = new Date("2026-09-09T12:00:00.000Z"); const createdAt = new Date("2026-09-01T00:00:00.000Z"); const secret = "test-secret-that-is-at-least-32-characters";
-const user: User = { id: 1, email: "user@example.com", passwordHash: "unused", role: "USER", isActive: true, createdAt, updatedAt: createdAt };
+const user: User = { id: 1, email: "user@example.com", passwordHash: "unused", role: "KAM", isActive: true, createdAt, updatedAt: createdAt };
 const cookie = `${AUTH_COOKIE}=${signAuthToken(user, secret)}`;
 const promo: Promo = { id: "promo-1", lob: "AW", name: "Apple Watch Promo", normalizedName: "apple watch promo", startDate: new Date("2026-09-07T00:00:00Z"), endDate: new Date("2026-09-13T00:00:00Z"), createdAt, updatedAt: createdAt };
 const partner: Partner = { id: "partner-1", name: "Rozetka", createdAt, updatedAt: createdAt };

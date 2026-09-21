@@ -37,7 +37,7 @@ export async function updateManagedUser(id: number, update: UserAdminUpdate): Pr
     const removesActiveSuperuser =
       user.role === "SUPERUSER" &&
       user.isActive &&
-      (update.role === "USER" || update.isActive === false);
+      (update.role === "KAM" || update.isActive === false);
     if (removesActiveSuperuser) {
       const activeSuperusers = await tx.user.count({ where: { role: "SUPERUSER", isActive: true } });
       if (activeSuperusers <= 1) throw new LastActiveSuperuserError();

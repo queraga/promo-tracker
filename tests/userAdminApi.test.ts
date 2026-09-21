@@ -17,9 +17,11 @@ function dependencies(currentUser: User, overrides: Partial<ApiDependencies> = {
     findUserByEmail: vi.fn().mockResolvedValue(currentUser),
     findUserById: vi.fn().mockResolvedValue(currentUser),
     listUsers: vi.fn().mockResolvedValue([toManagedUser(currentUser)]),
+    listAdminPartnerCatalog: vi.fn().mockResolvedValue([]),
     createManagedUser: vi.fn(),
     updateManagedUser: vi.fn(),
     updateManagedUserPassword: vi.fn(),
+    replaceUserPartnerAssignments: vi.fn(),
     ...overrides,
   };
 }
@@ -57,7 +59,7 @@ describe("user administration API", () => {
     const agent = await authenticatedAgent(makeUser("SUPERUSER", 1), { createManagedUser: create });
     const response = await agent.post("/api/users").send({ email: "new@example.com", password: "strong-password", role: "KAM" });
     expect(response.status).toBe(201);
-    expect(create).toHaveBeenCalledWith("new@example.com", "strong-password", "KAM");
+    expect(create).toHaveBeenCalledWith("new@example.com", "strong-password", "KAM", []);
     expect(response.body).not.toHaveProperty("passwordHash");
   });
   it("updates role and active state", async () => {

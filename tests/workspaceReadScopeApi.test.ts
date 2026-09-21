@@ -12,6 +12,7 @@ type Dataset = Awaited<ReturnType<typeof createDataset>>;
 
 const cookie = (user: User) => `${AUTH_COOKIE}=${signAuthToken(user, secret)}`;
 const get = (path: string, user: User) => request(createApi({ jwtSecret: secret, now: () => now })).get(path).set("Cookie", cookie(user));
+const patchReport = (id: string, user: User, received = true) => request(createApi({ jwtSecret: secret, now: () => now })).patch(`/api/promo-partners/${id}/report`).set("Cookie", cookie(user)).send({ received });
 
 async function createPromo(id: string, name: string, partnerIds: string[]) {
   return prisma.promo.create({ data: {
@@ -21,7 +22,7 @@ async function createPromo(id: string, name: string, partnerIds: string[]) {
     normalizedName: name.toLowerCase(),
     startDate: new Date("2026-09-01T00:00:00.000Z"),
     endDate: new Date("2026-09-02T00:00:00.000Z"),
-    partners: { create: partnerIds.map((partnerId) => ({ partnerId, rawEmailSubject: `${name} subject for ${partnerId}` })) },
+    partners: { create: partnerIds.map((partnerId) => ({ id: `${id}-${partnerId}`, partnerId, rawEmailSubject: `${name} subject for ${partnerId}` })) },
   } });
 }
 
@@ -140,5 +141,73 @@ describe("partner-scoped workspace read API", () => {
     await prisma.userPartner.delete({ where: { userId_partnerId: { userId: data.kamCitrus.id, partnerId: data.citrus.id } } });
     expect((await get("/api/partners", data.kamCitrus)).body).toEqual(["MOYO"]);
     expect((await get("/api/promos/citrus-only", data.kamCitrus)).status).toBe(404);
+  });
+});
+
+describe("partner-scoped report mutation API", () => {
+  it("allows SUPERUSER to mutate every partner relation and returns 404 for a missing ID", async () => {
+    const data = await createDataset();
+    for (const id of ["citrus-only-citrus-id", "moyo-rozetka-moyo-id", "rozetka-only-rozetka-id"]) {
+      expect((await patchReport(id, data.superuser)).status).toBe(200);
+      expect((await prisma.promoPartner.findUniqueOrThrow({ where: { id } })).reportReceived).toBe(true);
+    }
+    expect((await patchReport("missing", data.superuser)).status).toBe(404);
+  });
+
+  it("allows a Citrus KAM only the Citrus relation and hides other and missing IDs identically", async () => {
+    const data = await createDataset();
+    expect((await patchReport("citrus-only-citrus-id", data.kamCitrus)).status).toBe(200);
+    const unauthorized = await patchReport("rozetka-only-rozetka-id", data.kamCitrus);
+    const unauthorizedMoyo = await patchReport("moyo-rozetka-moyo-id", data.kamCitrus);
+    const missing = await patchReport("missing", data.kamCitrus);
+    expect(unauthorized.status).toBe(404);
+    expect(unauthorizedMoyo.status).toBe(404);
+    expect(missing.status).toBe(404);
+    expect(unauthorized.body).toEqual(missing.body);
+    expect(unauthorizedMoyo.body).toEqual(missing.body);
+    const unchanged = await prisma.promoPartner.findMany({ where: { id: { in: ["rozetka-only-rozetka-id", "moyo-rozetka-moyo-id"] } } });
+    expect(unchanged.every((relation) => !relation.reportReceived && relation.reportReceivedAt === null)).toBe(true);
+  });
+
+  it("allows a Citrus and MOYO KAM to mutate those relations but not Rozetka", async () => {
+    const data = await createDataset();
+    expect((await patchReport("citrus-only-citrus-id", data.kamCitrusMoyo)).status).toBe(200);
+    expect((await patchReport("moyo-rozetka-moyo-id", data.kamCitrusMoyo)).status).toBe(200);
+    expect((await patchReport("rozetka-only-rozetka-id", data.kamCitrusMoyo)).status).toBe(404);
+    expect((await prisma.promoPartner.findUniqueOrThrow({ where: { id: "rozetka-only-rozetka-id" } })).reportReceived).toBe(false);
+  });
+
+  it("fails closed without mutating anything for a KAM with zero assignments", async () => {
+    const data = await createDataset();
+    for (const id of ["citrus-only-citrus-id", "moyo-rozetka-moyo-id", "rozetka-only-rozetka-id"]) {
+      expect((await patchReport(id, data.kamZero)).status).toBe(404);
+    }
+    const relations = await prisma.promoPartner.findMany();
+    expect(relations.every((relation) => !relation.reportReceived && relation.reportReceivedAt === null)).toBe(true);
+  });
+
+  it("authorizes the specific relation rather than every relation on a visible multi-partner Promo", async () => {
+    const data = await createDataset();
+    const citrusId = "citrus-rozetka-citrus-id";
+    const rozetkaId = "citrus-rozetka-rozetka-id";
+    expect((await patchReport(citrusId, data.kamCitrus)).status).toBe(200);
+    expect((await patchReport(rozetkaId, data.kamCitrus)).status).toBe(404);
+    expect(await prisma.promoPartner.findUniqueOrThrow({ where: { id: citrusId } })).toMatchObject({ reportReceived: true });
+    expect(await prisma.promoPartner.findUniqueOrThrow({ where: { id: rozetkaId } })).toMatchObject({ reportReceived: false, reportReceivedAt: null });
+  });
+
+  it("applies assignment revoke and grant on the next mutation without re-login", async () => {
+    const data = await createDataset();
+    const citrusId = "citrus-only-citrus-id";
+    const moyoId = "moyo-rozetka-moyo-id";
+    expect((await patchReport(citrusId, data.kamCitrus)).status).toBe(200);
+    await prisma.userPartner.delete({ where: { userId_partnerId: { userId: data.kamCitrus.id, partnerId: data.citrus.id } } });
+    expect((await patchReport(citrusId, data.kamCitrus, false)).status).toBe(404);
+    expect((await prisma.promoPartner.findUniqueOrThrow({ where: { id: citrusId } })).reportReceived).toBe(true);
+
+    expect((await patchReport(moyoId, data.kamCitrus)).status).toBe(404);
+    await prisma.userPartner.create({ data: { userId: data.kamCitrus.id, partnerId: data.moyo.id } });
+    expect((await patchReport(moyoId, data.kamCitrus)).status).toBe(200);
+    expect((await prisma.promoPartner.findUniqueOrThrow({ where: { id: moyoId } })).reportReceived).toBe(true);
   });
 });

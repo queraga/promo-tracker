@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { createUser, getAdminPartners, getUsers, replaceUserPartners, updateUser, updateUserPassword } from "../shared/api/client";
+import { useEffect, useMemo, useReducer, useState, type FormEvent } from "react";
+import { createUser, deleteUser, getAdminPartners, getUsers, replaceUserPartners, updateUser, updateUserPassword } from "../shared/api/client";
 import type { AdminPartnerCatalogItem, CurrentUser, ManagedUser } from "../types";
 
 type Props = { currentUser: CurrentUser; onCurrentUserChange: (user: ManagedUser) => void; onError: (message: string) => void };
@@ -9,6 +9,32 @@ export function assignmentKeysForUser(user: Pick<ManagedUser, "partners">, catal
 }
 
 export const partnerKeysForRole = (role: CurrentUser["role"], keys: string[]) => role === "KAM" ? keys : [];
+export const removeDeletedUser = (users: ManagedUser[], id: number) => users.filter((user) => user.id !== id);
+
+export type UserDeleteState = { target: ManagedUser | null; busy: boolean };
+export type UserDeleteAction = { type: "open"; user: ManagedUser } | { type: "cancel" | "success" } | { type: "start" | "failure" };
+export const userDeleteReducer = (state: UserDeleteState, action: UserDeleteAction): UserDeleteState => {
+  if (action.type === "open") return { target: action.user, busy: false };
+  if (action.type === "cancel" || action.type === "success") return { target: null, busy: false };
+  if (action.type === "start") return { ...state, busy: true };
+  return { ...state, busy: false };
+};
+
+export function DeleteUserDialog({ state, onCancel, onConfirm }: { state: UserDeleteState; onCancel: () => void; onConfirm: () => void }) {
+  if (!state.target) return null;
+  return <div className="user-dialog-backdrop" role="presentation">
+    <div className="user-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-user-title">
+      <h3 id="delete-user-title">Видалити користувача?</h3>
+      <p>Користувача <strong>{state.target.email}</strong> буде видалено назавжди. Це не видалить партнерів або промо.</p>
+      <div className="user-dialog-actions"><button type="button" className="reset" disabled={state.busy} onClick={onCancel}>Скасувати</button><button type="button" className="danger-button" disabled={state.busy} onClick={onConfirm}>{state.busy ? "Видалення…" : "Видалити"}</button></div>
+    </div>
+  </div>;
+}
+
+export function DeleteUserAction({ user, onOpen }: { user: ManagedUser; onOpen: (user: ManagedUser) => void }) {
+  if (user.role !== "KAM") return null;
+  return <button type="button" className="delete-user" onClick={() => onOpen(user)}>Видалити</button>;
+}
 
 export function PartnerAssignmentSelector({ catalog, selected, onChange, label = "Партнери" }: { catalog: AdminPartnerCatalogItem[]; selected: string[]; onChange: (keys: string[]) => void; label?: string }) {
   const [query, setQuery] = useState("");
@@ -79,6 +105,7 @@ export function UserManagement({ currentUser, onCurrentUserChange, onError }: Pr
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<CurrentUser["role"]>("KAM");
   const [partnerKeys, setPartnerKeys] = useState<string[]>([]);
+  const [deleteState, dispatchDelete] = useReducer(userDeleteReducer, { target: null, busy: false });
   const load = () => Promise.all([getUsers(), getAdminPartners()]).then(([loadedUsers, loadedCatalog]) => { setUsers(loadedUsers); setCatalog(loadedCatalog); }).catch((reason) => onError((reason as Error).message)).finally(() => setLoading(false));
   useEffect(() => { void load(); }, []);
 
@@ -92,6 +119,13 @@ export function UserManagement({ currentUser, onCurrentUserChange, onError }: Pr
     try { const updated = await updateUser(user.id, update); setUsers((current) => current.map((item) => item.id === updated.id ? updated : item)); if (updated.id === currentUser.id) onCurrentUserChange(updated); }
     catch (reason) { onError((reason as Error).message); }
     finally { setBusyId(null); }
+  };
+  const confirmDelete = async () => {
+    const target = deleteState.target;
+    if (!target) return;
+    dispatchDelete({ type: "start" });
+    try { await deleteUser(target.id); setUsers((current) => removeDeletedUser(current, target.id)); dispatchDelete({ type: "success" }); }
+    catch (reason) { dispatchDelete({ type: "failure" }); onError((reason as Error).message); }
   };
 
   return <section className="users-page" aria-labelledby="users-heading">
@@ -111,7 +145,8 @@ export function UserManagement({ currentUser, onCurrentUserChange, onError }: Pr
         <button className={user.isActive ? "deactivate" : "activate"} disabled={busyId === user.id} onClick={() => void change(user, { isActive: !user.isActive })}>{user.isActive ? "Деактивувати" : "Активувати"}</button>
         <PasswordReset user={user} onError={onError} />
       </div>
-      {user.role === "KAM" ? <UserPartnerEditor user={user} catalog={catalog} onSaved={(partners) => setUsers((current) => current.map((item) => item.id === user.id ? { ...item, partners } : item))} onError={onError} /> : <div className="superuser-scope"><span>Партнери</span><strong>Повний доступ</strong></div>}
+      {user.role === "KAM" ? <><UserPartnerEditor user={user} catalog={catalog} onSaved={(partners) => setUsers((current) => current.map((item) => item.id === user.id ? { ...item, partners } : item))} onError={onError} /><DeleteUserAction user={user} onOpen={(target) => dispatchDelete({ type: "open", user: target })} /></> : <div className="superuser-scope"><span>Партнери</span><strong>Повний доступ</strong></div>}
     </article>)}</div>}
+    <DeleteUserDialog state={deleteState} onCancel={() => dispatchDelete({ type: "cancel" })} onConfirm={() => void confirmDelete()} />
   </section>;
 }

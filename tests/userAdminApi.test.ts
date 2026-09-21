@@ -3,7 +3,7 @@ import request from "supertest";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { createApi, type ApiDependencies } from "../src/api/createApi.js";
 import { hashPassword } from "../src/features/auth/password.js";
-import { LastActiveSuperuserError, toManagedUser } from "../src/features/auth/userAdmin.js";
+import { LastActiveSuperuserError, SuperuserDeletionError, toManagedUser } from "../src/features/auth/userAdmin.js";
 
 const secret = "test-secret-that-is-at-least-32-characters";
 const createdAt = new Date("2026-09-01T00:00:00Z");
@@ -21,6 +21,7 @@ function dependencies(currentUser: User, overrides: Partial<ApiDependencies> = {
     createManagedUser: vi.fn(),
     updateManagedUser: vi.fn(),
     updateManagedUserPassword: vi.fn(),
+    deleteManagedKam: vi.fn(),
     replaceUserPartnerAssignments: vi.fn(),
     ...overrides,
   };
@@ -38,6 +39,7 @@ describe("user administration API", () => {
     const response = method === "get" ? await app.get("/api/users") : method === "post" ? await app.post("/api/users").send({}) : method === "patch" ? await app.patch("/api/users/2").send({ role: "KAM" }) : await app.put("/api/users/2/password").send({ password: "new-password" });
     expect(response.status).toBe(401);
   });
+  it("rejects unauthenticated delete requests", async () => expect((await request(createApi(dependencies(makeUser("SUPERUSER", 1)))).delete("/api/users/2")).status).toBe(401));
 
   it("prevents KAM from listing users", async () => expect((await (await authenticatedAgent(makeUser("KAM", 1))).get("/api/users")).status).toBe(403));
   it("rechecks a changed role on an existing session", async () => {
@@ -76,6 +78,22 @@ describe("user administration API", () => {
     expect((await agent.put("/api/users/2/password").send({ password: "new-password" })).status).toBe(200);
     expect(reset).toHaveBeenCalledWith(2, "new-password");
   });
+  it("allows SUPERUSER to delete a KAM", async () => {
+    const remove = vi.fn().mockResolvedValue(true);
+    const agent = await authenticatedAgent(makeUser("SUPERUSER", 1), { deleteManagedKam: remove });
+    expect((await agent.delete("/api/users/2")).body).toEqual({ success: true });
+    expect(remove).toHaveBeenCalledWith(2);
+  });
+  it("rejects deleting any SUPERUSER", async () => {
+    const remove = vi.fn().mockRejectedValue(new SuperuserDeletionError());
+    const agent = await authenticatedAgent(makeUser("SUPERUSER", 1), { deleteManagedKam: remove });
+    expect((await agent.delete("/api/users/1")).status).toBe(409);
+  });
+  it("returns 404 for an unknown user", async () => {
+    const agent = await authenticatedAgent(makeUser("SUPERUSER", 1), { deleteManagedKam: vi.fn().mockResolvedValue(false) });
+    expect((await agent.delete("/api/users/999")).status).toBe(404);
+  });
+  it("prevents KAM from deleting users", async () => expect((await (await authenticatedAgent(makeUser("KAM", 1))).delete("/api/users/2")).status).toBe(403));
   it("rejects removing the last active SUPERUSER", async () => {
     const update = vi.fn().mockRejectedValue(new LastActiveSuperuserError());
     const agent = await authenticatedAgent(makeUser("SUPERUSER", 1), { updateManagedUser: update });

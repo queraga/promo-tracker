@@ -14,5 +14,6 @@ export const getUsers = () => apiFetch<ManagedUser[]>("/api/users");
 export const getAdminPartners = () => apiFetch<AdminPartnerCatalogItem[]>("/api/admin/partners");
 export const createUser = (email: string, password: string, role: CurrentUser["role"], partnerKeys: string[] = []) => apiFetch<ManagedUser>("/api/users", { method: "POST", body: JSON.stringify({ email, password, role, partnerKeys }) });
 export const updateUser = (id: number, update: { role?: CurrentUser["role"]; isActive?: boolean }) => apiFetch<ManagedUser>(`/api/users/${id}`, { method: "PATCH", body: JSON.stringify(update) });
+export const deleteUser = (id: number) => apiFetch<{ success: boolean }>(`/api/users/${id}`, { method: "DELETE" });
 export const replaceUserPartners = (id: number, partnerKeys: string[]) => apiFetch<{ partners: AssignedPartner[] }>(`/api/users/${id}/partners`, { method: "PUT", body: JSON.stringify({ partnerKeys }) });
 export const updateUserPassword = (id: number, password: string) => apiFetch<{ success: boolean }>(`/api/users/${id}/password`, { method: "PUT", body: JSON.stringify({ password }) });

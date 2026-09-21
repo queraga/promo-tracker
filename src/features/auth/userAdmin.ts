@@ -13,6 +13,12 @@ export class LastActiveSuperuserError extends Error {
   }
 }
 
+export class SuperuserDeletionError extends Error {
+  constructor() {
+    super("SUPERUSER accounts cannot be deleted");
+  }
+}
+
 type UserWithAssignments = User & { partners?: Array<{ partner: AssignedPartner }> };
 export const toManagedUser = (user: UserWithAssignments): ManagedUser => ({
   id: user.id,
@@ -65,4 +71,14 @@ export async function updateManagedUserPassword(id: number, password: string): P
   const passwordHash = await hashPassword(password);
   await prisma.user.update({ where: { id }, data: { passwordHash } });
   return true;
+}
+
+export async function deleteManagedKam(id: number): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.findUnique({ where: { id }, select: { role: true } });
+    if (!user) return false;
+    if (user.role === "SUPERUSER") throw new SuperuserDeletionError();
+    await tx.user.delete({ where: { id } });
+    return true;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }

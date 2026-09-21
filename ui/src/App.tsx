@@ -31,6 +31,12 @@ export function DashboardSummary({ promos, partner }: { promos: PromoDto[]; part
   </div>;
 }
 
+export function UnassignedKamWorkspace() {
+  return <div className="empty unassigned-workspace"><div><strong>Партнерів ще не призначено</strong><span>Зверніться до адміністратора для отримання доступу.</span></div></div>;
+}
+
+export const isUnassignedKamWorkspace = (role: CurrentUser["role"], partners: string[], loading: boolean) => role === "KAM" && !loading && partners.length === 0;
+
 export default function App() {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -84,7 +90,7 @@ export default function App() {
       const apply = (promo: PromoDto) => ({ ...promo, partners: promo.partners.map((partner) => partner.promoPartnerId === id ? { ...partner, reportReceived: updated.reportReceived, reportReceivedAt: updated.reportReceivedAt } : partner) });
       setPromos((current) => current.map(apply));
       setSelected((current) => current ? apply(current) : null);
-    } catch (reason) { setError((reason as Error).message); }
+    } catch (reason) { setError((reason as Error).message); await loadWorkspace(user); }
     finally { setBusyId(null); }
   };
   const removePartner = async (promo: PromoDto, partnerId: string, partnerName: string) => {
@@ -120,8 +126,11 @@ export default function App() {
     <main>
       {page === "users" && user.role === "SUPERUSER" ? <UserManagement currentUser={user} onCurrentUserChange={updateCurrentUser} onError={setError} /> : <>
         <header className="page-header"><div><span className="eyebrow">Робочий простір KAM</span><h1>Promo Tracker</h1><p>Промоактивності та звіти партнерів</p></div><DashboardSummary promos={visiblePromos} partner={filters.partner} /></header>
-        <TrackerToolbar filters={filters} setFilters={setFilters} lobs={[...new Set(promos.map((promo) => promo.lob))].sort()} partners={knownPartners} selectedPartners={selectedPartners} setSelectedPartners={updateSelectedPartners} />
-        {loading ? <div className="empty">Завантаження…</div> : <>{promos.length === 0 ? <div className="empty desktop-empty">Промо ще не додані.</div> : <TrackerTable promos={visiblePromos} partners={visiblePartners} onSelect={selectPromo} />}<MobilePartnerFeed promos={filteredPromos} partners={knownPartners} selectedPartner={mobilePartner} pendingOnly={pendingOnly} onPartnerChange={updateMobilePartner} onSelect={selectPromo} /></>}
+        {loading ? <div className="empty">Завантаження…</div> : isUnassignedKamWorkspace(user.role, partners, loading) ? <UnassignedKamWorkspace /> : <>
+          <TrackerToolbar filters={filters} setFilters={setFilters} lobs={[...new Set(promos.map((promo) => promo.lob))].sort()} partners={knownPartners} selectedPartners={selectedPartners} setSelectedPartners={updateSelectedPartners} />
+          {promos.length === 0 ? <div className="empty desktop-empty">Промо ще не додані.</div> : <TrackerTable promos={visiblePromos} partners={visiblePartners} onSelect={selectPromo} />}
+          <MobilePartnerFeed promos={filteredPromos} partners={knownPartners} selectedPartner={mobilePartner} pendingOnly={pendingOnly} onPartnerChange={updateMobilePartner} onSelect={selectPromo} />
+        </>}
       </>}
     </main>
     {error && <div className="error app-error" role="alert">{error}<button onClick={() => setError("")} aria-label="Закрити помилку">×</button></div>}

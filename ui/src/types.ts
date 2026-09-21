@@ -3,4 +3,6 @@ export type PromoPartnerDto = { promoPartnerId: string; partnerId: string; partn
 export type PromoDto = { id: string; lob: string; name: string; startDate: string; endDate: string; status: PromoStatus; partners: PromoPartnerDto[] };
 export type Filters = { search: string; lob: string; status: string; partner: string };
 export type CurrentUser = { id: number; email: string; role: "KAM" | "SUPERUSER" };
-export type ManagedUser = CurrentUser & { isActive: boolean; createdAt: string; updatedAt: string };
+export type AssignedPartner = { id: string; name: string };
+export type AdminPartnerCatalogItem = { key: string; id: string | null; name: string };
+export type ManagedUser = CurrentUser & { isActive: boolean; createdAt: string; updatedAt: string; partners: AssignedPartner[] };

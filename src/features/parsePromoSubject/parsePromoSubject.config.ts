@@ -48,10 +48,11 @@ export type LobRule = {
 
 // First matching rule wins. Accessories intentionally take priority over devices.
 export const LOB_RULES: readonly LobRule[] = [
-  { lob: "Accessories", keywords: ["accessories"] },
   {
     lob: "ACCY",
     keywords: [
+      "accy",
+      "accessories",
       "apple pencil",
       "silicone case",
       "clear case",

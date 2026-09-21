@@ -56,7 +56,7 @@ describe("parsePromoSubject", () => {
     const result = parsePromoSubject(subject, now);
 
     expect(result).toMatchObject({
-      lob: "Accessories",
+      lob: "ACCY",
       partner: "Rozetka",
       startDate: "2026-09-25",
       endDate: "2026-09-27",
@@ -69,15 +69,22 @@ describe("parsePromoSubject", () => {
   it.each([
     "Нова лінійка NPI Accessories Apple - Rozetka (Offer & Split) - 25.09 - 27.09",
     "RE: Нова лінійка NPI accessories Apple - ROZETKA (Offer & Split) - 25.09 - 27.09",
-  ])("recognizes Accessories and Rozetka across prefix and case variants: %s", (subject) => {
+  ])("canonicalizes Accessories to ACCY across prefix and case variants: %s", (subject) => {
     expect(parsePromoSubject(subject, now)).toMatchObject({
-      lob: "Accessories",
+      lob: "ACCY",
       partner: "Rozetka",
       startDate: "2026-09-25",
       endDate: "2026-09-27",
       warnings: [],
     });
   });
+
+  it.each(["Accessories", "accessories", "ACCESSORIES", "ACCY", "accy"])(
+    "canonicalizes the accessory LOB alias %s to ACCY",
+    (alias) => {
+      expect(parsePromoSubject(`NPI ${alias} Promo 25.09-27.09 - Rozetka`, now).lob).toBe("ACCY");
+    },
+  );
 
   it.each(["allo", "Allo", "ALLO", "Алло"])("keeps one canonical value across capitalization: %s", (alias) => {
     expect(parsePromoSubject(`Promo iPhone 07.09-13.09 - ${alias}`, now).partner).toBe("ALLO");

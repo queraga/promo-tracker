@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createUser } from "../src/features/auth/createUser.js";
 import { deletePromo, removePromoPartner } from "../src/features/promoAdmin/deletePromo.js";
+import { resolvePartnerAccessScope } from "../src/features/partnerAccess/resolvePartnerAccessScope.js";
 import { prisma } from "../src/shared/db/prisma.js";
 
 beforeEach(async () => { await prisma.user.deleteMany(); await prisma.promoPartner.deleteMany(); await prisma.promo.deleteMany(); await prisma.partner.deleteMany(); });
@@ -68,5 +69,19 @@ describe("UserPartner persistence", () => {
     expect(await prisma.promoPartner.count()).toBe(0);
     expect(await prisma.promo.count()).toBe(1);
     expect(await prisma.user.count()).toBe(1);
+  });
+
+  it("resolves assignments from current UserPartner rows on every request", async () => {
+    const user = await prisma.user.create({ data: { email: "dynamic-scope@example.com", passwordHash: "hash" } });
+    const [citrus, moyo] = await Promise.all([
+      prisma.partner.create({ data: { name: "Citrus" } }),
+      prisma.partner.create({ data: { name: "MOYO" } }),
+    ]);
+
+    await expect(resolvePartnerAccessScope(user)).resolves.toEqual({ kind: "restricted", partnerIds: [] });
+    await prisma.userPartner.createMany({ data: [{ userId: user.id, partnerId: moyo.id }, { userId: user.id, partnerId: citrus.id }] });
+    await expect(resolvePartnerAccessScope(user)).resolves.toEqual({ kind: "restricted", partnerIds: [citrus.id, moyo.id].sort() });
+    await prisma.userPartner.delete({ where: { userId_partnerId: { userId: user.id, partnerId: citrus.id } } });
+    await expect(resolvePartnerAccessScope(user)).resolves.toEqual({ kind: "restricted", partnerIds: [moyo.id] });
   });
 });

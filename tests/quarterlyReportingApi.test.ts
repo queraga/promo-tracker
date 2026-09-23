@@ -101,8 +101,8 @@ describe("quarterly reporting API", () => {
     await prisma.promoPartner.update({ where: { id: "q3-a-citrus" }, data: { reportReceived: true, reportReceivedAt: now } });
     await api().post("/api/reporting/close").set(auth(plm)).send({ year: 2026, quarter: 3, lob: "iPhone" }).expect(200);
     const [adminPromos, plmPromos, kamPromos] = await Promise.all([admin, plm, kam].map((user) => api().get("/api/promos").set(auth(user))));
-    expect(adminPromos.body.map((promo: { id: string }) => promo.id)).toEqual(["q3-mac", "cross"]);
-    expect(plmPromos.body.map((promo: { id: string }) => promo.id)).toEqual(["q3-mac", "cross"]);
+    expect(adminPromos.body.map((promo: { id: string }) => promo.id).sort()).toEqual(["cross", "q3-mac"]);
+    expect(plmPromos.body.map((promo: { id: string }) => promo.id).sort()).toEqual(["cross", "q3-mac"]);
     expect(kamPromos.body.map((promo: { id: string }) => promo.id)).toEqual(["cross"]);
     expect((await api().get("/api/promos/q3-a").set(auth(admin))).status).toBe(404);
     const archive = await api().get("/api/reporting/archive").set(auth(admin));

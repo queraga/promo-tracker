@@ -1,5 +1,5 @@
-import { prisma } from "../../shared/db/prisma.js";
 import { CANONICAL_PARTNERS } from "../parsePromoSubject/parsePromoSubject.config.js";
+import { getAllPromos } from "../promoQueries/getAllPromos.js";
 
 export function orderPartnerNames(names: string[]): string[] {
   const storedNames = new Set(names);
@@ -9,10 +9,6 @@ export function orderPartnerNames(names: string[]): string[] {
 }
 
 export async function getPartnerNames(): Promise<string[]> {
-  const stored = await prisma.partner.findMany({
-    where: { promos: { some: {} } },
-    select: { name: true },
-    orderBy: { name: "asc" },
-  });
-  return orderPartnerNames(stored.map(({ name }) => name));
+  const promos = await getAllPromos();
+  return orderPartnerNames([...new Set(promos.flatMap(({ partners }) => partners.map(({ partner }) => partner.name)))]);
 }

@@ -3,6 +3,7 @@ import type { PromoRecord } from "../../api/dto.js";
 import { prisma } from "../../shared/db/prisma.js";
 import { orderPartnerNames } from "../partnerQueries/getPartnerNames.js";
 import type { PartnerAccessScope } from "./partnerAccess.types.js";
+import { assertReportingPeriodOpen } from "../quarterlyReporting/closedPeriods.js";
 
 export type PromoPartnerOption = { id: string; name: string; alreadyAssociated: boolean };
 
@@ -15,8 +16,9 @@ const visiblePromoWhere = (promoId: string, scope: PartnerAccessScope): Prisma.P
   : { id: promoId, partners: { some: { partnerId: { in: scope.partnerIds } } } };
 
 export async function getPromoPartnerOptions(promoId: string, scope: PartnerAccessScope): Promise<PromoPartnerOption[] | null> {
-  const promo = await prisma.promo.findFirst({ where: visiblePromoWhere(promoId, scope), select: { partners: { select: { partnerId: true } } } });
+  const promo = await prisma.promo.findFirst({ where: visiblePromoWhere(promoId, scope), select: { lob: true, endDate: true, partners: { select: { partnerId: true } } } });
   if (!promo) return null;
+  await assertReportingPeriodOpen(promo);
   const partners = await prisma.partner.findMany({
     where: scope.kind === "global" ? {} : { id: { in: scope.partnerIds } },
     select: { id: true, name: true },
@@ -32,8 +34,9 @@ export async function getPromoPartnerOptions(promoId: string, scope: PartnerAcce
 export async function expandPromoPartners(promoId: string, partnerIds: string[], scope: PartnerAccessScope): Promise<PromoRecord | null> {
   const requestedIds = [...new Set(partnerIds)];
   return prisma.$transaction(async (tx) => {
-    const promo = await tx.promo.findFirst({ where: visiblePromoWhere(promoId, scope), select: { id: true } });
+    const promo = await tx.promo.findFirst({ where: visiblePromoWhere(promoId, scope), select: { id: true, lob: true, endDate: true } });
     if (!promo) return null;
+    await assertReportingPeriodOpen(promo, tx);
 
     const allowedTargetIds = scope.kind === "global" ? requestedIds : requestedIds.filter((id) => scope.partnerIds.includes(id));
     const targets = await tx.partner.findMany({

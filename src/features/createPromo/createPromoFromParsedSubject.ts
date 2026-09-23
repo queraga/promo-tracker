@@ -5,6 +5,7 @@ import {
   InvalidParsedPromoSubjectError,
   type CreatePromoResult,
 } from "./createPromo.types.js";
+import { assertReportingPeriodOpen } from "../quarterlyReporting/closedPeriods.js";
 
 export async function createPromoFromParsedSubject(
   parsed: ParsedPromoSubject,
@@ -24,6 +25,7 @@ export async function createPromoFromParsedSubject(
   const endDate = parsePromoDate(parsed.endDate);
 
   return prisma.$transaction(async (tx) => {
+    await assertReportingPeriodOpen({ lob: parsed.lob!, endDate }, tx);
     const promoKey = {
       lob_normalizedName_startDate_endDate: {
         lob: parsed.lob!,

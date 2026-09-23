@@ -1,4 +1,4 @@
-import type { AdminPartnerCatalogItem, AssignedPartner, CurrentUser, ManagedUser, PromoDto, PromoPartnerOption } from "../../types";
+import type { AdminPartnerCatalogItem, ArchivedPeriod, ArchivedPeriodDetail, AssignedPartner, CurrentUser, ManagedUser, PromoDto, PromoPartnerOption, QuarterSelection, QuarterlySummary } from "../../types";
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> { const response = await fetch(path, { ...init, credentials: "include", headers: { "Content-Type": "application/json", ...init?.headers } }); if (!response.ok) { const body = await response.json().catch(() => ({ error: "Помилка запиту" })); throw new Error(body.error ?? "Помилка запиту"); } return response.json() as Promise<T>; }
 export const getCurrentUser = () => apiFetch<CurrentUser>("/api/auth/me");
 export const login = (email: string, password: string) => apiFetch<CurrentUser>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
@@ -19,3 +19,8 @@ export const updateUser = (id: number, update: { role?: CurrentUser["role"]; isA
 export const deleteUser = (id: number) => apiFetch<{ success: boolean }>(`/api/users/${id}`, { method: "DELETE" });
 export const replaceUserPartners = (id: number, partnerKeys: string[]) => apiFetch<{ partners: AssignedPartner[] }>(`/api/users/${id}/partners`, { method: "PUT", body: JSON.stringify({ partnerKeys }) });
 export const updateUserPassword = (id: number, password: string) => apiFetch<{ success: boolean }>(`/api/users/${id}/password`, { method: "PUT", body: JSON.stringify({ password }) });
+export const getQuarterlySelections = () => apiFetch<{ quarters: QuarterSelection[]; lobs: string[] }>("/api/reporting/selections");
+export const getQuarterlySummary = (year: number, quarter: number, lob: string) => apiFetch<QuarterlySummary>(`/api/reporting/summary?year=${year}&quarter=${quarter}&lob=${encodeURIComponent(lob)}`);
+export const closeQuarter = (year: number, quarter: number, lob: string) => apiFetch<QuarterlySummary & { alreadyClosed: boolean }>("/api/reporting/close", { method: "POST", body: JSON.stringify({ year, quarter, lob }) });
+export const getArchive = () => apiFetch<ArchivedPeriod[]>("/api/reporting/archive");
+export const getArchivedPeriod = (id: string) => apiFetch<ArchivedPeriodDetail>(`/api/reporting/archive/${id}`);

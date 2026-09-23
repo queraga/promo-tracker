@@ -6,6 +6,8 @@ import { PromoDrawer } from "./components/PromoDrawer";
 import { TrackerTable } from "./components/TrackerTable";
 import { TrackerToolbar } from "./components/TrackerToolbar";
 import { UserManagement } from "./components/UserManagement";
+import { QuarterlyReporting } from "./components/QuarterlyReporting";
+import { ArchivePage } from "./components/ArchivePage";
 import { deletePromo, getCurrentUser, getPartners, getPromo, getPromos, logout, removePromoPartner, updateReportStatus } from "./shared/api/client";
 import { removePartnerFromState, removePromoFromState } from "./shared/lib/admin";
 import { countPendingReports, filterPromos, getPartnerColumns, getVisiblePartnerColumns, sortPromos } from "./shared/lib/tracker";
@@ -13,13 +15,15 @@ import { readMobilePartner, readPartnerColumns, reconcileMobilePartner, reconcil
 import type { CurrentUser, Filters, ManagedUser, PromoDto } from "./types";
 
 const initialFilters: Filters = { search: "", lob: "", status: "", partner: "" };
-type Page = "tracker" | "users";
+type Page = "tracker" | "users" | "quarterly" | "archive";
 export const replaceWorkspacePromo = (promos: PromoDto[], updated: PromoDto) => promos.map((promo) => promo.id === updated.id ? updated : promo);
 
-export function SidebarNavigation({ role, page, pendingOnly, pending, onOverview, onPending, onUsers }: { role: CurrentUser["role"]; page: Page; pendingOnly: boolean; pending: number; onOverview: () => void; onPending: () => void; onUsers: () => void }) {
+export function SidebarNavigation({ role, page, pendingOnly, pending, onOverview, onPending, onUsers, onQuarterly, onArchive }: { role: CurrentUser["role"]; page: Page; pendingOnly: boolean; pending: number; onOverview: () => void; onPending: () => void; onUsers: () => void; onQuarterly: () => void; onArchive: () => void }) {
   return <nav aria-label="Основна навігація">
     <button className={page === "tracker" && !pendingOnly ? "active" : ""} onClick={onOverview}>Огляд</button>
     <button className={page === "tracker" && pendingOnly ? "active" : ""} onClick={onPending}>Очікуються звіти <em>{pending}</em></button>
+    {(role === "PLM" || role === "SUPERUSER") && <button className={page === "quarterly" ? "active" : ""} onClick={onQuarterly}>Квартальна звітність</button>}
+    {(role === "PLM" || role === "SUPERUSER") && <button className={page === "archive" ? "active" : ""} onClick={onArchive}>Архів</button>}
     {role === "SUPERUSER" && <button className={page === "users" ? "active" : ""} onClick={onUsers}>Користувачі</button>}
   </nav>;
 }
@@ -122,7 +126,7 @@ export default function App() {
   return <div className="shell">
     <aside className="sidebar">
       <ProductBrand />
-      <SidebarNavigation role={user.role} page={page} pendingOnly={pendingOnly} pending={pending} onOverview={showAll} onPending={() => { setPage("tracker"); setPendingOnly(true); setFilters(initialFilters); }} onUsers={() => { setPage("users"); setSelected(null); }} />
+      <SidebarNavigation role={user.role} page={page} pendingOnly={pendingOnly} pending={pending} onOverview={showAll} onPending={() => { setPage("tracker"); setPendingOnly(true); setFilters(initialFilters); }} onUsers={() => { setPage("users"); setSelected(null); }} onQuarterly={() => { setPage("quarterly"); setSelected(null); }} onArchive={() => { setPage("archive"); setSelected(null); }} />
       <div className="account"><span>{user.email}</span><small>{user.role}</small><button onClick={signOut}>Вийти</button></div>
       <a className="telegram-link" href="https://t.me/promo_tracker_kam_bot" target="_blank" rel="noreferrer">
         <span>Telegram — канал додавання промо</span>
@@ -130,7 +134,7 @@ export default function App() {
       </a>
     </aside>
     <main>
-      {page === "users" && user.role === "SUPERUSER" ? <UserManagement currentUser={user} onCurrentUserChange={updateCurrentUser} onError={setError} /> : <>
+      {page === "users" && user.role === "SUPERUSER" ? <UserManagement currentUser={user} onCurrentUserChange={updateCurrentUser} onError={setError} /> : page === "quarterly" && (user.role === "PLM" || user.role === "SUPERUSER") ? <QuarterlyReporting user={user} onClosed={() => void loadWorkspace(user)} onError={setError} /> : page === "archive" && (user.role === "PLM" || user.role === "SUPERUSER") ? <ArchivePage onError={setError} /> : <>
         <header className="page-header"><div><span className="eyebrow">Робочий простір {user.role}</span><h1>Promo Tracker</h1><p>Промоактивності та звіти партнерів</p></div><DashboardSummary promos={visiblePromos} partner={filters.partner} /></header>
         {loading ? <div className="empty">Завантаження…</div> : isUnassignedKamWorkspace(user.role, partners, loading) ? <UnassignedKamWorkspace /> : <>
           <TrackerToolbar filters={filters} setFilters={setFilters} lobs={[...new Set(promos.map((promo) => promo.lob))].sort()} partners={knownPartners} selectedPartners={selectedPartners} setSelectedPartners={updateSelectedPartners} />

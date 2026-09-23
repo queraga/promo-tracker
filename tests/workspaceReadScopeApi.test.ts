@@ -34,8 +34,9 @@ async function createDataset() {
     prisma.partner.create({ data: { id: "ktc-id", name: "KTC" } }),
     prisma.partner.create({ data: { id: "unused-id", name: "Unused Legacy" } }),
   ]);
-  const [superuser, kamCitrus, kamCitrusMoyo, kamZero, kamZeroPromo] = await Promise.all([
+  const [superuser, plm, kamCitrus, kamCitrusMoyo, kamZero, kamZeroPromo] = await Promise.all([
     prisma.user.create({ data: { email: "admin@scope.test", passwordHash: "hash", role: "SUPERUSER" } }),
+    prisma.user.create({ data: { email: "plm@scope.test", passwordHash: "hash", role: "PLM" } }),
     prisma.user.create({ data: { email: "citrus@scope.test", passwordHash: "hash", role: "KAM" } }),
     prisma.user.create({ data: { email: "multi@scope.test", passwordHash: "hash", role: "KAM" } }),
     prisma.user.create({ data: { email: "zero@scope.test", passwordHash: "hash", role: "KAM" } }),
@@ -53,7 +54,7 @@ async function createDataset() {
     createPromo("citrus-rozetka", "Citrus and Rozetka", [citrus.id, rozetka.id]),
     createPromo("moyo-rozetka", "MOYO and Rozetka", [moyo.id, rozetka.id]),
   ]);
-  return { citrus, moyo, rozetka, zeroPromo, unused, superuser, kamCitrus, kamCitrusMoyo, kamZero, kamZeroPromo };
+  return { citrus, moyo, rozetka, zeroPromo, unused, superuser, plm, kamCitrus, kamCitrusMoyo, kamZero, kamZeroPromo };
 }
 
 beforeEach(async () => {
@@ -74,6 +75,43 @@ describe("partner-scoped workspace read API", () => {
     expect((await get("/api/promos/rozetka-only", data.superuser)).status).toBe(200);
     expect((await get("/api/reports/pending", data.superuser)).body).toHaveLength(6);
     expect((await get("/api/partners", data.superuser)).body).toEqual(["MOYO", "Citrus", "Rozetka"]);
+  });
+
+  it("gives a zero-assignment PLM the complete global read workspace", async () => {
+    const data = await createDataset();
+    expect(await prisma.userPartner.count({ where: { userId: data.plm.id } })).toBe(0);
+    const promos = await get("/api/promos", data.plm);
+    expect(promos.status).toBe(200);
+    expect(promos.body).toHaveLength(4);
+    expect(promos.body.find((promo: { id: string }) => promo.id === "citrus-rozetka").partners).toHaveLength(2);
+    expect((await get("/api/promos/rozetka-only", data.plm)).status).toBe(200);
+    expect((await get("/api/partners", data.plm)).body).toEqual(["MOYO", "Citrus", "Rozetka"]);
+    expect((await get("/api/reports/pending", data.plm)).body).toHaveLength(6);
+  });
+
+  it("keeps PLM global visibility separate from every business and admin mutation capability", async () => {
+    const data = await createDataset();
+    const client = request(createApi({ jwtSecret: secret, now: () => now }));
+    const auth = { Cookie: cookie(data.plm) };
+    const attempts = [
+      client.delete("/api/promos/citrus-only").set(auth),
+      client.delete(`/api/promos/citrus-only/partners/${data.citrus.id}`).set(auth),
+      client.patch("/api/promo-partners/citrus-only-citrus-id/report").set(auth).send({ received: true }),
+      client.post("/api/promos/citrus-only/partners").set(auth).send({ partnerIds: [data.moyo.id] }),
+      client.get("/api/promos/citrus-only/partner-options").set(auth),
+      client.get("/api/users").set(auth),
+      client.get("/api/admin/partners").set(auth),
+      client.post("/api/users").set(auth).send({ email: "new@test.dev", password: "strong-password", role: "KAM" }),
+      client.patch(`/api/users/${data.kamCitrus.id}`).set(auth).send({ role: "PLM" }),
+      client.patch(`/api/users/${data.kamCitrus.id}`).set(auth).send({ isActive: false }),
+      client.put(`/api/users/${data.kamCitrus.id}/password`).set(auth).send({ password: "new-password" }),
+      client.put(`/api/users/${data.kamCitrus.id}/partners`).set(auth).send({ partnerKeys: [] }),
+      client.delete(`/api/users/${data.kamCitrus.id}`).set(auth),
+    ];
+    expect(await Promise.all(attempts).then((responses) => responses.map(({ status }) => status))).toEqual(Array(attempts.length).fill(403));
+    expect(await prisma.promo.count()).toBe(4);
+    expect(await prisma.promoPartner.count()).toBe(6);
+    expect((await prisma.promoPartner.findUniqueOrThrow({ where: { id: "citrus-only-citrus-id" } })).reportReceived).toBe(false);
   });
 
   it("returns only Citrus promos and nested relations for a Citrus KAM", async () => {

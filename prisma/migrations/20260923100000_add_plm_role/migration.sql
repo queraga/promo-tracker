@@ -1,0 +1,2 @@
+-- SQLite stores Prisma enum values as TEXT without a database CHECK constraint.
+-- Registering PLM therefore requires no table rebuild or data mutation.

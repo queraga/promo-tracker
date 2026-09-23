@@ -11,6 +11,12 @@ describe("partner access scope", () => {
     expect(findPartnerIds).not.toHaveBeenCalled();
   });
 
+  it("returns global for PLM without loading or requiring assignments", async () => {
+    const findPartnerIds = vi.fn();
+    await expect(resolvePartnerAccessScope(user(3, "PLM"), findPartnerIds)).resolves.toEqual({ kind: "global" });
+    expect(findPartnerIds).not.toHaveBeenCalled();
+  });
+
   it("returns restricted zero access for a KAM with no assignments", async () => {
     const scope = await resolvePartnerAccessScope(user(2, "KAM"), vi.fn().mockResolvedValue([]));
     expect(scope).toEqual({ kind: "restricted", partnerIds: [] });

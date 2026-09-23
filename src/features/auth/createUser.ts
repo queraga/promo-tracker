@@ -10,7 +10,7 @@ export async function createUser(email: string, password: string, role: string) 
 export async function prepareUser(email: string, password: string, role: string) {
   const normalizedEmail = email.trim().toLowerCase();
   if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) throw new Error("Invalid email");
-  if (role !== "KAM" && role !== "SUPERUSER") throw new Error("Role must be KAM or SUPERUSER");
+  if (role !== "KAM" && role !== "PLM" && role !== "SUPERUSER") throw new Error("Role must be KAM, PLM or SUPERUSER");
   const passwordHash = await hashPassword(password);
   return { email: normalizedEmail, passwordHash, role: role as UserRole };
 }

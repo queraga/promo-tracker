@@ -1,4 +1,5 @@
 import type { User, UserRole } from "@prisma/client";
+import { hasCapability, type UserCapability } from "./capabilities.js";
 import type { NextFunction, Request, Response } from "express";
 import { verifyAuthToken } from "./authService.js";
 
@@ -18,6 +19,16 @@ export function requireAuth(secret: string, findUser: FindUser) {
 export function requireRole(role: UserRole) {
   return (_request: Request, response: Response, next: NextFunction) => {
     if ((response.locals.user as User | undefined)?.role !== role) { response.status(403).json({ error: "Недостатньо прав" }); return; }
+    next();
+  };
+}
+
+export function requireCapability(capability: UserCapability) {
+  return (_req: Request, res: Response, next: NextFunction) => {
+    if (!hasCapability(res.locals.user.role, capability)) {
+      res.status(403).json({ error: "Недостатньо прав" });
+      return;
+    }
     next();
   };
 }

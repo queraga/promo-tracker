@@ -15,7 +15,7 @@ export class InvalidPartnerAssignmentError extends Error {
 }
 
 export class SuperuserAssignmentsError extends Error {
-  constructor() { super("SUPERUSER does not use partner assignments"); }
+  constructor() { super("Only KAM users use partner assignments"); }
 }
 
 export async function listAdminPartnerCatalog(): Promise<AdminPartnerCatalogItem[]> {
@@ -70,7 +70,7 @@ export async function replaceUserPartnerAssignments(userId: number, partnerKeys:
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({ where: { id: userId }, select: { id: true, role: true } });
     if (!user) return null;
-    if (user.role === "SUPERUSER") throw new SuperuserAssignmentsError();
+    if (user.role !== "KAM") throw new SuperuserAssignmentsError();
     const partners = await resolvePartnerAssignmentKeys(tx, partnerKeys);
     await tx.userPartner.deleteMany({ where: { userId } });
     if (partners.length) await tx.userPartner.createMany({ data: partners.map(({ id: partnerId }) => ({ userId, partnerId })) });

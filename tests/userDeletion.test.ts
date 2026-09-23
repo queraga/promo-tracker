@@ -18,7 +18,7 @@ beforeEach(async () => {
   await prisma.partner.deleteMany();
 });
 
-describe("KAM deletion", () => {
+describe("non-SUPERUSER deletion", () => {
   it("deletes the KAM and assignments while preserving partners, promos, relations, and report state", async () => {
     const admin = await prisma.user.create({ data: { email: "admin@delete.test", passwordHash: "hash", role: "SUPERUSER" } });
     const kam = await prisma.user.create({ data: { email: "kam@delete.test", passwordHash: "hash", role: "KAM" } });
@@ -40,6 +40,16 @@ describe("KAM deletion", () => {
     expect(await prisma.promo.count()).toBe(1);
     expect(await prisma.promoPartner.count()).toBe(1);
     expect(await prisma.promoPartner.findUniqueOrThrow({ where: { id: "delete-relation" } })).toMatchObject({ partnerId: citrus.id, reportReceived: true, reportReceivedAt });
+  });
+
+  it("allows SUPERUSER to delete a PLM without affecting business data", async () => {
+    const admin = await prisma.user.create({ data: { email: "admin@delete.test", passwordHash: "hash", role: "SUPERUSER" } });
+    const plm = await prisma.user.create({ data: { email: "plm@delete.test", passwordHash: "hash", role: "PLM" } });
+    const response = await request(app()).delete(`/api/users/${plm.id}`).set(authed(admin));
+    expect(response.status).toBe(200);
+    expect(await prisma.user.findUnique({ where: { id: plm.id } })).toBeNull();
+    expect(await prisma.promo.count()).toBe(0);
+    expect(await prisma.promoPartner.count()).toBe(0);
   });
 
   it("rejects deleting another SUPERUSER and deleting the authenticated SUPERUSER", async () => {

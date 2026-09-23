@@ -27,7 +27,7 @@ export const toManagedUser = (user: UserWithAssignments): ManagedUser => ({
   isActive: user.isActive,
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,
-  partners: user.role === "SUPERUSER" ? [] : orderAssignedPartners((user.partners ?? []).map(({ partner: { id, name } }) => ({ id, name }))),
+  partners: user.role === "KAM" ? orderAssignedPartners((user.partners ?? []).map(({ partner: { id, name } }) => ({ id, name }))) : [],
 });
 
 export async function listUsers(): Promise<ManagedUser[]> {
@@ -35,7 +35,7 @@ export async function listUsers(): Promise<ManagedUser[]> {
 }
 
 export async function createManagedUser(email: string, password: string, role: UserRole, partnerKeys: string[] = []): Promise<ManagedUser> {
-  if (role === "SUPERUSER" && partnerKeys.length) throw new SuperuserAssignmentsError();
+  if (role !== "KAM" && partnerKeys.length) throw new SuperuserAssignmentsError();
   const userData = await prepareUser(email, password, role);
   return prisma.$transaction(async (tx) => {
     const partners = role === "KAM" ? await resolvePartnerAssignmentKeys(tx, partnerKeys) : [];
@@ -52,15 +52,14 @@ export async function updateManagedUser(id: number, update: UserAdminUpdate): Pr
     const removesActiveSuperuser =
       user.role === "SUPERUSER" &&
       user.isActive &&
-      (update.role === "KAM" || update.isActive === false);
+      ((update.role !== undefined && update.role !== "SUPERUSER") || update.isActive === false);
     if (removesActiveSuperuser) {
       const activeSuperusers = await tx.user.count({ where: { role: "SUPERUSER", isActive: true } });
       if (activeSuperusers <= 1) throw new LastActiveSuperuserError();
     }
 
     const finalRole = update.role ?? user.role;
-    if (finalRole === "SUPERUSER") await tx.userPartner.deleteMany({ where: { userId: id } });
-    if (user.role === "SUPERUSER" && finalRole === "KAM") await tx.userPartner.deleteMany({ where: { userId: id } });
+    if (finalRole !== "KAM") await tx.userPartner.deleteMany({ where: { userId: id } });
     return toManagedUser(await tx.user.update({ where: { id }, data: update, include: { partners: { include: { partner: true } } } }));
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
@@ -73,7 +72,7 @@ export async function updateManagedUserPassword(id: number, password: string): P
   return true;
 }
 
-export async function deleteManagedKam(id: number): Promise<boolean> {
+export async function deleteManagedUser(id: number): Promise<boolean> {
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({ where: { id }, select: { role: true } });
     if (!user) return false;
@@ -82,3 +81,5 @@ export async function deleteManagedKam(id: number): Promise<boolean> {
     return true;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
+
+export const deleteManagedKam = deleteManagedUser;

@@ -21,7 +21,7 @@ export function signAuthToken(user: Pick<User, "id" | "role">, secret: string): 
 export function verifyAuthToken(token: string, secret: string): { userId: number; role: UserRole } | null {
   try {
     const payload = jwt.verify(token, secret);
-    if (typeof payload === "string" || !payload.sub || (payload.role !== "KAM" && payload.role !== "SUPERUSER")) return null;
+    if (typeof payload === "string" || !payload.sub || !(["KAM", "PLM", "SUPERUSER"] as const).includes(payload.role as UserRole)) return null;
     const userId = Number(payload.sub);
     return Number.isInteger(userId) ? { userId, role: payload.role } : null;
   } catch { return null; }

@@ -159,6 +159,39 @@ describe("SUPERUSER partner assignment administration", () => {
     }
   });
 
+  it("enforces assignment-free PLM role transitions atomically", async () => {
+    const { superuser, backup, kam } = await users();
+    const citrus = await prisma.partner.create({ data: { name: "Citrus" } });
+    await prisma.userPartner.create({ data: { userId: kam.id, partnerId: citrus.id } });
+
+    expect((await api(superuser).patch(`/api/users/${kam.id}`).set(authed(superuser)).send({ role: "PLM" })).status).toBe(200);
+    expect(await prisma.userPartner.count({ where: { userId: kam.id } })).toBe(0);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: kam.id } })).role).toBe("PLM");
+
+    expect((await api(superuser).patch(`/api/users/${kam.id}`).set(authed(superuser)).send({ role: "KAM" })).status).toBe(200);
+    expect(await prisma.userPartner.count({ where: { userId: kam.id } })).toBe(0);
+
+    expect((await api(superuser).patch(`/api/users/${kam.id}`).set(authed(superuser)).send({ role: "PLM" })).status).toBe(200);
+    expect((await api(superuser).patch(`/api/users/${kam.id}`).set(authed(superuser)).send({ role: "SUPERUSER" })).status).toBe(200);
+    expect(await prisma.userPartner.count({ where: { userId: kam.id } })).toBe(0);
+
+    expect((await api(superuser).patch(`/api/users/${backup.id}`).set(authed(superuser)).send({ role: "PLM" })).status).toBe(200);
+    expect(await prisma.userPartner.count({ where: { userId: backup.id } })).toBe(0);
+    expect((await api(superuser).put(`/api/users/${backup.id}/partners`).set(authed(superuser)).send({ partnerKeys: ["canonical:Citrus"] })).status).toBe(409);
+  });
+
+  it("creates PLM without assignments and rejects contradictory PLM assignments", async () => {
+    const { superuser } = await users();
+    const created = await api(superuser).post("/api/users").set(authed(superuser)).send({ email: "plm@example.com", password: "strong-password", role: "PLM" });
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({ role: "PLM", partners: [] });
+    expect(await prisma.userPartner.count({ where: { userId: created.body.id } })).toBe(0);
+
+    const rejected = await api(superuser).post("/api/users").set(authed(superuser)).send({ email: "bad-plm@example.com", password: "strong-password", role: "PLM", partnerKeys: ["canonical:Citrus"] });
+    expect(rejected.status).toBe(400);
+    expect(await prisma.user.count({ where: { email: "bad-plm@example.com" } })).toBe(0);
+  });
+
   it("updates scoped read and report mutation access on the next KAM request", async () => {
     const { superuser, kam } = await users();
     const [citrus, moyo] = await Promise.all([

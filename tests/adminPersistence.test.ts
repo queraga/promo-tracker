@@ -22,7 +22,7 @@ describe("admin persistence", () => {
 describe("user creation", () => {
   it("stores a bcrypt hash instead of plaintext", async () => { const user = await createUser("Admin@Example.com", "strong-password", "SUPERUSER"); expect(user.email).toBe("admin@example.com"); expect(user.passwordHash).not.toBe("strong-password"); expect(await bcrypt.compare("strong-password", user.passwordHash)).toBe(true); });
   it("rejects a duplicate email", async () => { await createUser("user@example.com", "strong-password", "KAM"); await expect(createUser("User@Example.com", "another-password", "KAM")).rejects.toMatchObject({ code: "P2002" }); });
-  it("rejects an invalid role", async () => expect(createUser("user@example.com", "strong-password", "ADMIN")).rejects.toThrow("KAM or SUPERUSER"));
+  it("rejects an invalid role", async () => expect(createUser("user@example.com", "strong-password", "ADMIN")).rejects.toThrow("KAM, PLM or SUPERUSER"));
 });
 
 describe("UserPartner persistence", () => {

@@ -17,6 +17,6 @@ export async function resolvePartnerAccessScope(
   user: Pick<User, "id" | "role">,
   findPartnerIds: AssignmentLookup = loadAssignedPartnerIds,
 ): Promise<PartnerAccessScope> {
-  if (user.role === "SUPERUSER") return { kind: "global" };
+  if (user.role === "SUPERUSER" || user.role === "PLM") return { kind: "global" };
   return { kind: "restricted", partnerIds: await findPartnerIds(user.id) };
 }

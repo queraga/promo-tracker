@@ -16,8 +16,9 @@ async function loginAgent(user: User, overrides: Partial<ApiDependencies> = {}) 
 describe("authentication API", () => {
   it("logs in an active user and never returns passwordHash", async () => { const user = makeUser(); const response = await request(createApi(deps(user))).post("/api/auth/login").send({ email: user.email, password: "correct-password" }); expect(response.status).toBe(200); expect(response.body).toEqual({ id: 1, email: user.email, role: "KAM" }); expect(JSON.stringify(response.body)).not.toContain("passwordHash"); expect(response.headers["set-cookie"][0]).toContain("HttpOnly"); });
   it("sets matching 30-day cookie and JWT lifetimes", async () => { const user = makeUser(); const response = await request(createApi(deps(user))).post("/api/auth/login").send({ email: user.email, password: "correct-password" }); const cookie = response.headers["set-cookie"][0]; expect(cookie).toContain(`Max-Age=${AUTH_SESSION_SECONDS}`); const token = cookie.match(/^promo_tracker_session=([^;]+)/)?.[1]; const payload = jwt.decode(token ?? "") as JwtPayload | null; expect(payload?.exp && payload.iat ? payload.exp - payload.iat : 0).toBe(AUTH_SESSION_SECONDS); });
-  it("accepts KAM and SUPERUSER tokens but rejects the legacy USER role", () => {
+  it("accepts KAM, PLM and SUPERUSER tokens but rejects the legacy USER role", () => {
     expect(verifyAuthToken(jwt.sign({ role: "KAM" }, secret, { subject: "1" }), secret)?.role).toBe("KAM");
+    expect(verifyAuthToken(jwt.sign({ role: "PLM" }, secret, { subject: "3" }), secret)?.role).toBe("PLM");
     expect(verifyAuthToken(jwt.sign({ role: "SUPERUSER" }, secret, { subject: "2" }), secret)?.role).toBe("SUPERUSER");
     expect(verifyAuthToken(jwt.sign({ role: "USER" }, secret, { subject: "3" }), secret)).toBeNull();
   });

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CurrentUser, PromoDto, PromoPartnerOption, PromoStatus } from "../types";
 import { addPromoPartners, getPromoPartnerOptions } from "../shared/api/client";
-import { canManagePromos } from "../shared/lib/admin";
+import { canExpandPromoPartners, canManagePromos, canMutateReports } from "../shared/lib/admin";
 
 const labels: Record<PromoStatus, string> = { active: "Активне", planned: "Заплановане", finished: "Завершене" };
 const formatDate = (value: string) => new Intl.DateTimeFormat("uk-UA", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(value));
@@ -31,6 +31,8 @@ export function PromoDrawer({ promo, user, busyId, onClose, onToggle, onDeletePr
   const [submitting, setSubmitting] = useState(false);
   useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === "Escape") expanding ? setExpanding(false) : onClose(); }; window.addEventListener("keydown", close); return () => window.removeEventListener("keydown", close); }, [expanding, onClose]);
   const superuser = canManagePromos(user);
+  const canExpand = canExpandPromoPartners(user);
+  const canReport = canMutateReports(user);
   const openExpansion = async () => {
     setExpanding(true); setLoadingOptions(true); setSelectedPartnerIds([]);
     try { setOptions(await getPromoPartnerOptions(promo.id)); }
@@ -45,7 +47,7 @@ export function PromoDrawer({ promo, user, busyId, onClose, onToggle, onDeletePr
   };
   return <><button className="drawer-backdrop" aria-label="Закрити деталі" onClick={onClose} /><aside className="drawer" aria-label="Деталі промо"><header><div><span className="eyebrow">{promo.lob}</span><h2>{promo.name}</h2></div><button className="close" onClick={onClose} aria-label="Закрити">×</button></header>
     <dl className="details"><div><dt>Період</dt><dd>{formatDate(promo.startDate)} — {formatDate(promo.endDate)}</dd></div><div><dt>Статус</dt><dd><span className={`badge ${promo.status}`}>{labels[promo.status]}</span></dd></div></dl>
-    <section><div className="drawer-section-heading"><h3>Партнери</h3><button type="button" className="add-partners" onClick={() => void openExpansion()}>Додати партнерів</button></div>{promo.partners.map((partner) => <article className="partner-detail" key={partner.promoPartnerId}><div className="partner-row"><div><strong>{partner.partnerName}</strong><span>{partner.reportReceived ? "Звіт отримано" : promo.status === "finished" ? "Очікується звіт" : "Звіт ще не очікується"}</span></div><div className="partner-actions"><button disabled={busyId === partner.promoPartnerId} className={partner.reportReceived ? "report received" : "report"} onClick={() => onToggle(partner.promoPartnerId, !partner.reportReceived)}>{partner.reportReceived ? "✓ Отримано" : "Позначити отриманим"}</button>{superuser && <button className="danger-link" onClick={() => onRemovePartner(promo, partner.partnerId, partner.partnerName)}>Видалити зв’язок</button>}</div></div>{partner.rawEmailSubject ? <div className="subject"><span>Тема листа</span><code>{partner.rawEmailSubject}</code></div> : <div className="manual-relation">Додано вручну</div>}</article>)}</section>
+    <section><div className="drawer-section-heading"><h3>Партнери</h3>{canExpand && <button type="button" className="add-partners" onClick={() => void openExpansion()}>Додати партнерів</button>}</div>{promo.partners.map((partner) => <article className="partner-detail" key={partner.promoPartnerId}><div className="partner-row"><div><strong>{partner.partnerName}</strong><span>{partner.reportReceived ? "Звіт отримано" : promo.status === "finished" ? "Очікується звіт" : "Звіт ще не очікується"}</span></div><div className="partner-actions">{canReport && <button disabled={busyId === partner.promoPartnerId} className={partner.reportReceived ? "report received" : "report"} onClick={() => onToggle(partner.promoPartnerId, !partner.reportReceived)}>{partner.reportReceived ? "✓ Отримано" : "Позначити отриманим"}</button>}{superuser && <button className="danger-link" onClick={() => onRemovePartner(promo, partner.partnerId, partner.partnerName)}>Видалити зв’язок</button>}</div></div>{partner.rawEmailSubject ? <div className="subject"><span>Тема листа</span><code>{partner.rawEmailSubject}</code></div> : <div className="manual-relation">Додано вручну</div>}</article>)}</section>
     {superuser && <section className="danger-zone"><h3>Адміністрування</h3><button className="danger-button" onClick={() => onDeletePromo(promo)}>Видалити промо</button></section>}
-  </aside>{expanding && <PartnerExpansionDialog options={options} selected={selectedPartnerIds} loading={loadingOptions} submitting={submitting} onToggle={(id) => setSelectedPartnerIds((current) => togglePartnerSelection(current, id))} onSelectAll={() => setSelectedPartnerIds(selectAllAvailablePartners(options))} onCancel={() => { setExpanding(false); setSelectedPartnerIds([]); }} onAdd={() => void addPartners()} />}</>;
+  </aside>{canExpand && expanding && <PartnerExpansionDialog options={options} selected={selectedPartnerIds} loading={loadingOptions} submitting={submitting} onToggle={(id) => setSelectedPartnerIds((current) => togglePartnerSelection(current, id))} onSelectAll={() => setSelectedPartnerIds(selectAllAvailablePartners(options))} onCancel={() => { setExpanding(false); setSelectedPartnerIds([]); }} onAdd={() => void addPartners()} />}</>;
 }

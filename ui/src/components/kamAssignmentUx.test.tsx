@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { isUnassignedKamWorkspace, UnassignedKamWorkspace } from "../App";
 import type { AdminPartnerCatalogItem, ManagedUser } from "../types";
-import { assignmentKeysForUser, PartnerAssignmentSelector, partnerKeysForRole } from "./UserManagement";
+import { assignmentKeysForUser, PartnerAssignmentSelector, partnerKeysForRole, usesPartnerAssignments } from "./UserManagement";
 
 const catalog: AdminPartnerCatalogItem[] = [
   { key: "canonical:Rozetka", id: "partner-rozetka", name: "Rozetka" },
@@ -24,7 +24,13 @@ describe("KAM assignment administration", () => {
   it("shows an explicit zero-assignment state", () => expect(renderToStaticMarkup(<PartnerAssignmentSelector catalog={catalog} selected={[]} onChange={vi.fn()} />)).toContain("Не призначено"));
   it("clears assignments for SUPERUSER transitions and preserves them for KAM", () => {
     expect(partnerKeysForRole("SUPERUSER", ["canonical:Rozetka"])).toEqual([]);
+    expect(partnerKeysForRole("PLM", ["canonical:Rozetka"])).toEqual([]);
     expect(partnerKeysForRole("KAM", ["canonical:Rozetka"])).toEqual(["canonical:Rozetka"]);
+  });
+  it("shows the partner selector only for KAM provisioning", () => {
+    expect(usesPartnerAssignments("KAM")).toBe(true);
+    expect(usesPartnerAssignments("PLM")).toBe(false);
+    expect(usesPartnerAssignments("SUPERUSER")).toBe(false);
   });
 });
 

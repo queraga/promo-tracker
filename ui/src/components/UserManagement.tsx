@@ -8,7 +8,8 @@ export function assignmentKeysForUser(user: Pick<ManagedUser, "partners">, catal
   return user.partners.flatMap((partner) => catalog.find((item) => item.id === partner.id)?.key ?? catalog.find((item) => item.id === null && item.name === partner.name)?.key ?? []);
 }
 
-export const partnerKeysForRole = (role: CurrentUser["role"], keys: string[]) => role === "KAM" ? keys : [];
+export const usesPartnerAssignments = (role: CurrentUser["role"]) => role === "KAM";
+export const partnerKeysForRole = (role: CurrentUser["role"], keys: string[]) => usesPartnerAssignments(role) ? keys : [];
 export const removeDeletedUser = (users: ManagedUser[], id: number) => users.filter((user) => user.id !== id);
 
 export type UserDeleteState = { target: ManagedUser | null; busy: boolean };
@@ -32,7 +33,7 @@ export function DeleteUserDialog({ state, onCancel, onConfirm }: { state: UserDe
 }
 
 export function DeleteUserAction({ user, onOpen }: { user: ManagedUser; onOpen: (user: ManagedUser) => void }) {
-  if (user.role !== "KAM") return null;
+  if (user.role === "SUPERUSER") return null;
   return <button type="button" className="delete-user" onClick={() => onOpen(user)}>Видалити</button>;
 }
 
@@ -134,18 +135,18 @@ export function UserManagement({ currentUser, onCurrentUserChange, onError }: Pr
       <h3>Новий користувач</h3>
       <label><span>Email</span><input type="email" required autoComplete="off" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
       <label><span>Тимчасовий пароль</span><input type="password" minLength={8} required autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-      <label><span>Роль</span><select value={role} onChange={(event) => { const nextRole = event.target.value as CurrentUser["role"]; setRole(nextRole); if (nextRole === "SUPERUSER") setPartnerKeys([]); }}><option value="KAM">KAM</option><option value="SUPERUSER">SUPERUSER</option></select></label>
-      {role === "KAM" && <PartnerAssignmentSelector catalog={catalog} selected={partnerKeys} onChange={setPartnerKeys} />}
+      <label><span>Роль</span><select value={role} onChange={(event) => { const nextRole = event.target.value as CurrentUser["role"]; setRole(nextRole); if (nextRole !== "KAM") setPartnerKeys([]); }}><option value="KAM">KAM</option><option value="PLM">PLM</option><option value="SUPERUSER">SUPERUSER</option></select></label>
+      {usesPartnerAssignments(role) && <PartnerAssignmentSelector catalog={catalog} selected={partnerKeys} onChange={setPartnerKeys} />}
       <button type="submit">Створити користувача</button>
     </form>
     {loading ? <div className="empty">Завантаження…</div> : <div className="user-list">{users.map((user) => <article className={`user-card${user.isActive ? "" : " inactive"}`} key={user.id}>
       <div className="user-card-main">
         <div className="user-identity"><strong>{user.email}</strong><span>{user.isActive ? "Активний" : "Деактивований"}{user.id === currentUser.id ? " · Ви" : ""}</span></div>
-        <label><span>Роль</span><select aria-label={`Роль ${user.email}`} disabled={busyId === user.id} value={user.role} onChange={(event) => void change(user, { role: event.target.value as CurrentUser["role"] })}><option value="KAM">KAM</option><option value="SUPERUSER">SUPERUSER</option></select></label>
+        <label><span>Роль</span><select aria-label={`Роль ${user.email}`} disabled={busyId === user.id} value={user.role} onChange={(event) => void change(user, { role: event.target.value as CurrentUser["role"] })}><option value="KAM">KAM</option><option value="PLM">PLM</option><option value="SUPERUSER">SUPERUSER</option></select></label>
         <button className={user.isActive ? "deactivate" : "activate"} disabled={busyId === user.id} onClick={() => void change(user, { isActive: !user.isActive })}>{user.isActive ? "Деактивувати" : "Активувати"}</button>
         <PasswordReset user={user} onError={onError} />
       </div>
-      {user.role === "KAM" ? <><UserPartnerEditor user={user} catalog={catalog} onSaved={(partners) => setUsers((current) => current.map((item) => item.id === user.id ? { ...item, partners } : item))} onError={onError} /><DeleteUserAction user={user} onOpen={(target) => dispatchDelete({ type: "open", user: target })} /></> : <div className="superuser-scope"><span>Партнери</span><strong>Повний доступ</strong></div>}
+      {user.role === "KAM" ? <><UserPartnerEditor user={user} catalog={catalog} onSaved={(partners) => setUsers((current) => current.map((item) => item.id === user.id ? { ...item, partners } : item))} onError={onError} /><DeleteUserAction user={user} onOpen={(target) => dispatchDelete({ type: "open", user: target })} /></> : <><div className="superuser-scope"><span>Партнери</span><strong>{user.role === "PLM" ? "Повний перегляд" : "Повний доступ"}</strong></div><DeleteUserAction user={user} onOpen={(target) => dispatchDelete({ type: "open", user: target })} /></>}
     </article>)}</div>}
     <DeleteUserDialog state={deleteState} onCancel={() => dispatchDelete({ type: "cancel" })} onConfirm={() => void confirmDelete()} />
   </section>;

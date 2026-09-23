@@ -131,7 +131,7 @@ export default function App() {
     </aside>
     <main>
       {page === "users" && user.role === "SUPERUSER" ? <UserManagement currentUser={user} onCurrentUserChange={updateCurrentUser} onError={setError} /> : <>
-        <header className="page-header"><div><span className="eyebrow">Робочий простір KAM</span><h1>Promo Tracker</h1><p>Промоактивності та звіти партнерів</p></div><DashboardSummary promos={visiblePromos} partner={filters.partner} /></header>
+        <header className="page-header"><div><span className="eyebrow">Робочий простір {user.role}</span><h1>Promo Tracker</h1><p>Промоактивності та звіти партнерів</p></div><DashboardSummary promos={visiblePromos} partner={filters.partner} /></header>
         {loading ? <div className="empty">Завантаження…</div> : isUnassignedKamWorkspace(user.role, partners, loading) ? <UnassignedKamWorkspace /> : <>
           <TrackerToolbar filters={filters} setFilters={setFilters} lobs={[...new Set(promos.map((promo) => promo.lob))].sort()} partners={knownPartners} selectedPartners={selectedPartners} setSelectedPartners={updateSelectedPartners} />
           {promos.length === 0 ? <div className="empty desktop-empty">Промо ще не додані.</div> : <TrackerTable promos={visiblePromos} partners={visiblePartners} onSelect={selectPromo} />}

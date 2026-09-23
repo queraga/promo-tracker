@@ -4,7 +4,7 @@ import { DashboardSummary, SidebarNavigation } from "../App";
 import type { PromoDto, PromoStatus } from "../types";
 
 const promo = (id: string, status: PromoStatus, partnerName = "Rozetka", reportReceived = false): PromoDto => ({ id, status, lob: "AW", name: `Promo ${id}`, startDate: "2026-09-01", endDate: "2026-09-02", partners: [{ promoPartnerId: `relation-${id}-${partnerName}`, partnerId: `partner-${partnerName}`, partnerName, reportReceived, reportReceivedAt: null, rawEmailSubject: `Promo ${id}` }] });
-const navigation = (role: "KAM" | "SUPERUSER") => renderToStaticMarkup(<SidebarNavigation role={role} page="tracker" pendingOnly={false} pending={2} onOverview={vi.fn()} onPending={vi.fn()} onUsers={vi.fn()} />);
+const navigation = (role: "KAM" | "PLM" | "SUPERUSER") => renderToStaticMarkup(<SidebarNavigation role={role} page="tracker" pendingOnly={false} pending={2} onOverview={vi.fn()} onPending={vi.fn()} onUsers={vi.fn()} />);
 
 describe("dashboard summary and navigation", () => {
   it("shows total promos, active promos and pending reports in order", () => {
@@ -31,5 +31,12 @@ describe("dashboard summary and navigation", () => {
 
   it("keeps user administration hidden from KAM", () => {
     expect(navigation("KAM")).not.toContain("Користувачі");
+  });
+
+  it("shows the normal tracker navigation but no Users administration for PLM", () => {
+    const html = navigation("PLM");
+    expect(html).toContain("Огляд");
+    expect(html).toContain("Очікуються звіти");
+    expect(html).not.toContain("Користувачі");
   });
 });

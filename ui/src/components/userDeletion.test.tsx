@@ -6,9 +6,10 @@ import { DeleteUserAction, DeleteUserDialog, removeDeletedUser, userDeleteReduce
 const user = (role: ManagedUser["role"], id = 2): ManagedUser => ({ id, email: `${role.toLowerCase()}@example.com`, role, isActive: true, createdAt: "2026-09-01", updatedAt: "2026-09-01", partners: [] });
 const initial: UserDeleteState = { target: null, busy: false };
 
-describe("KAM deletion UI", () => {
-  it("shows the delete action only for KAM", () => {
+describe("non-SUPERUSER deletion UI", () => {
+  it("shows the delete action for KAM and PLM but never SUPERUSER", () => {
     expect(renderToStaticMarkup(<DeleteUserAction user={user("KAM")} onOpen={vi.fn()} />)).toContain("Видалити");
+    expect(renderToStaticMarkup(<DeleteUserAction user={user("PLM")} onOpen={vi.fn()} />)).toContain("Видалити");
     expect(renderToStaticMarkup(<DeleteUserAction user={user("SUPERUSER")} onOpen={vi.fn()} />)).toBe("");
   });
   it("opens confirmation on the first action and identifies the account", () => {

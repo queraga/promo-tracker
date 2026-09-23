@@ -13,6 +13,11 @@ enum UserRole {
   SUPERUSER
 }
 
+enum ReportingPeriodStatus {
+  OPEN
+  CLOSED
+}
+
 model User {
   id           Int      @id @default(autoincrement())
   email        String   @unique
@@ -23,6 +28,7 @@ model User {
   updatedAt    DateTime @updatedAt
 
   partners UserPartner[]
+  closedReportingPeriods ReportingPeriod[] @relation("ReportingPeriodClosedBy")
 }
 
 model Promo {
@@ -82,4 +88,22 @@ model PromoPartner {
   @@unique([promoId, partnerId])
   @@index([partnerId])
   @@index([promoId])
+}
+
+model ReportingPeriod {
+  id             String                @id @default(cuid())
+  year           Int
+  quarter        Int
+  lob            String
+  status         ReportingPeriodStatus @default(OPEN)
+  closedAt       DateTime?
+  closedByUserId Int?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  closedBy User? @relation("ReportingPeriodClosedBy", fields: [closedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([year, quarter, lob])
+  @@index([status, year, quarter])
+  @@index([closedByUserId])
 }

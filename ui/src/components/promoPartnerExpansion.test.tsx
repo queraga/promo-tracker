@@ -23,7 +23,8 @@ describe("promo partner expansion UI", () => {
     expect(html).toContain("Додати партнерів");
     expect(html).toContain("Real Kibernetiki subject");
     expect(html).toContain("Додано вручну");
-    expect((html.match(/Тема листа/g) ?? [])).toHaveLength(1);
+    expect((html.match(/Вхідний текст/g) ?? [])).toHaveLength(1);
+    expect(html).not.toContain("Тема листа");
   });
   it("shows already-added partners disabled and assigned available partners selectable", () => {
     const html = dialog();

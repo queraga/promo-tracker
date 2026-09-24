@@ -4,13 +4,13 @@ import { escapeHtml } from "./html.js";
 
 export function formatPromoResult(result: CreatePromoResult): string {
   if (!result.createdPromo && result.createdPromoPartner) {
-    return `✅ <b>Partner added to existing promo</b>\n\nPromo: ${escapeHtml(result.promo.name)}\nPartner: ${escapeHtml(result.partner.name)}`;
+    return `✅ <b>Партнера додано до наявного промо</b>\n\nПромо: ${escapeHtml(result.promo.name)}\nPartner: ${escapeHtml(result.partner.name)}`;
   }
   if (!result.createdPromoPartner) {
-    return "ℹ️ <b>Promo already exists</b>\n\nLatest email subject was updated.";
+    return "ℹ️ <b>Промо вже існує</b>\n\nВхідний текст оновлено.";
   }
   return [
-    "✅ <b>Promo added</b>", "", `LOB: ${escapeHtml(result.promo.lob)}`,
+    "✅ <b>Промо додано</b>", "", `LOB: ${escapeHtml(result.promo.lob)}`,
     `Partner: ${escapeHtml(result.partner.name)}`,
     `Period: ${formatCompactPeriod(result.promo.startDate, result.promo.endDate)}`,
   ].join("\n");

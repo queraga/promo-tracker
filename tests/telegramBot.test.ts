@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createBot } from "../src/bot/createBot.js";
 import { formatActivePromos } from "../src/bot/formatters/formatActivePromos.js";
 import { formatPromoPreview } from "../src/bot/formatters/formatPromoPreview.js";
+import { formatPromoResult } from "../src/bot/formatters/formatPromoResult.js";
 import { splitMessage } from "../src/bot/formatters/splitMessage.js";
 import { PendingPromoStore } from "../src/bot/state/pendingPromoStore.js";
 import { getActivePromoView } from "../src/bot/workflows/activeWorkflow.js";
@@ -60,14 +61,14 @@ describe("Telegram bot workflows", () => {
     const persist = vi.fn();
     const result = handlePromoSubject(subject, identity, makeStore(), currentDate);
     expect(result.kind).toBe("preview");
-    expect(result.kind === "preview" && result.text).toContain("Promo detected");
+    expect(result.kind === "preview" && result.text).toContain("Промо розпізнано");
     expect(persist).not.toHaveBeenCalled();
   });
 
   it("shows warnings for invalid input without an Add confirmation", () => {
     const result = handlePromoSubject("Unknown promo", identity, makeStore(), currentDate);
     expect(result.kind).toBe("invalid");
-    expect(result.kind === "invalid" && result.text).toContain("Warnings:");
+    expect(result.kind === "invalid" && result.text).toContain("Не вдалося повністю розпізнати промо");
     expect("confirmationId" in result).toBe(false);
   });
 
@@ -179,6 +180,38 @@ describe("Telegram bot workflows", () => {
     const text = formatPromoPreview({ ...makeParsed(), promoName: "Promo <iPhone> & AirPods" });
     expect(text).toContain("Promo &lt;iPhone&gt; &amp; AirPods");
     expect(text).not.toContain("Promo <iPhone>");
+  });
+
+  it("gives focused guidance when only the period is missing", () => {
+    const text = formatPromoPreview({ ...makeParsed(), lob: "AW & AirPods", startDate: null, endDate: null, isValid: false, warnings: ["Promo period could not be detected"] });
+    expect(text).toContain("LOB: AW &amp; AirPods ✓"); expect(text).toContain("Partner: Rozetka ✓"); expect(text).toContain("Period: не знайдено"); expect(text).toContain("Не вдалося визначити період"); expect(text).not.toContain("Не вдалося визначити партнера");
+  });
+
+  it("marks every recognized field in a successful preview", () => {
+    const text = formatPromoPreview({ ...makeParsed(), lob: "AW & AirPods" });
+    expect(text).toContain("LOB: AW &amp; AirPods ✓");
+    expect(text).toContain("Partner: Rozetka ✓");
+    expect(text).toContain("Period: 07.09.2026 - 13.09.2026 ✓");
+  });
+
+  it("gives focused guidance when only the partner is missing", () => {
+    const text = formatPromoPreview({ ...makeParsed(), partner: null, isValid: false, warnings: ["Partner could not be detected"] });
+    expect(text).toContain("Partner: не знайдено"); expect(text).toContain("Не вдалося визначити партнера"); expect(text).not.toContain("Не вдалося визначити період");
+  });
+
+  it("gives focused guidance when only the LOB is missing", () => {
+    const text = formatPromoPreview({ ...makeParsed(), lob: null, isValid: false, warnings: ["LOB could not be detected"] });
+    expect(text).toContain("LOB: не знайдено"); expect(text).toContain("Не вдалося визначити LOB"); expect(text).not.toContain("Не вдалося визначити період");
+  });
+
+  it("lists every missing semantic field without parser internals", () => {
+    const text = formatPromoPreview({ ...makeParsed(), lob: null, partner: null, startDate: null, endDate: null, isValid: false, warnings: ["internal warning"] });
+    expect(text).toContain("Не вдалося визначити LOB"); expect(text).toContain("Не вдалося визначити партнера"); expect(text).toContain("Не вдалося визначити період"); expect(text).not.toContain("internal warning");
+  });
+
+  it("confirms successful persistence with recognized fields", () => {
+    const text = formatPromoResult(createResult());
+    expect(text).toContain("Промо додано"); expect(text).toContain("LOB:"); expect(text).toContain("Partner:"); expect(text).toContain("Period:");
   });
 
   it("splits very long active-promo HTML into independently valid chunks", () => {

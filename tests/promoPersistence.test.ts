@@ -32,6 +32,13 @@ describe("promo persistence", () => {
     expect(result.promo.startDate.toISOString()).toBe("2026-09-07T00:00:00.000Z");
   });
 
+  it("preserves a complete multi-line Telegram source verbatim", async () => {
+    const input = "Lob: AirPods & Apple Watch\nPartner: Citrus\nПеріод: 28.09-04.10\nApple Watch 12\nAirPods 5";
+    const result = await createPromoFromParsedSubject(parsed(input));
+    expect(result.promoPartner.rawEmailSubject).toBe(input);
+    expect(result.promo).toMatchObject({ lob: "AW & AirPods", name: "AirPods & Apple Watch" });
+  });
+
   it("reuses all records for an identical submission", async () => {
     await createPromoFromParsedSubject(parsed(iphoneRozetka));
     const second = await createPromoFromParsedSubject(parsed(iphoneRozetka));

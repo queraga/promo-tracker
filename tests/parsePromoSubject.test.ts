@@ -285,4 +285,68 @@ describe("parsePromoSubject", () => {
     const subject = "  Re: UPDATE! Promo iPhone 07.09-13.09 - Rozetka  ";
     expect(parsePromoSubject(subject, now).rawSubject).toBe(subject);
   });
+
+  it.each([
+    ["28.09-04.10 Promo AirPods - Citrus", "Citrus"],
+    ["Promo AirPods 28.09-04.10 - Citrus", "Citrus"],
+    ["Promo AirPods Citrus 28.09-04.10", "Citrus"],
+    ["Promo AirPods - Citrus 28.09.2026 - 04.10.2026", "Citrus"],
+    ["Promo AirPods 28/09 - 04/10 - Citrus", "Citrus"],
+  ])("detects period and partner independently: %s", (subject, partner) => {
+    expect(parsePromoSubject(subject, now)).toMatchObject({ partner, startDate: "2026-09-28", endDate: "2026-10-04", isValid: true });
+  });
+
+  it.each(["Період: 28.09-04.10", "Period: 28.09 - 04.10"])("prioritizes an explicit period field: %s", (period) => {
+    expect(parsePromoSubject(`LOB: AirPods\nPartner: Citrus\n${period}`, now)).toMatchObject({ startDate: "2026-09-28", endDate: "2026-10-04", isValid: true });
+  });
+
+  it.each(["Partner: Citrus", "Партнер: Citrus"])("resolves a recognized explicit partner field: %s", (partner) => {
+    expect(parsePromoSubject(`LOB: AirPods\n${partner}\nПеріод: 28.09-04.10`, now).partner).toBe("Citrus");
+  });
+
+  it("does not accept invalid explicit fields or calendar dates", () => {
+    const result = parsePromoSubject("LOB: Unknown Product\nPartner: UnknownShop\nПеріод: 31.09-04.10\nAirPods Citrus 28.09-04.10", now);
+    expect(result).toMatchObject({ partner: "Citrus", lob: "AirPods", startDate: null, endDate: null, isValid: false });
+    expect(result.warnings).toContain("Invalid promo period detected");
+  });
+
+  it.each([
+    ["Apple Watch Promo 28.09-04.10 - Citrus", "AW"],
+    ["AirPods Promo 28.09-04.10 - Citrus", "AirPods"],
+    ["AirPods & Apple Watch 28.09-04.10 - Citrus", "AW & AirPods"],
+    ["Apple Watch & AirPods 28.09-04.10 - Citrus", "AW & AirPods"],
+    ["AirPods 5 + Apple Watch 12 28.09-04.10 - Citrus", "AW & AirPods"],
+    ["Apple Watch Ultra 4 / AirPods 5 28.09-04.10 - Citrus", "AW & AirPods"],
+    ["LOB: AirPods & Apple Watch\nPartner: Citrus\nPeriod: 28.09-04.10", "AW & AirPods"],
+    ["LOB: Accessories\nPartner: Citrus\nPeriod: 28.09-04.10", "ACCY"],
+  ])("canonicalizes LOB independently: %s", (subject, lob) => {
+    expect(parsePromoSubject(subject, now).lob).toBe(lob);
+  });
+
+  it("lets a valid explicit LOB win over inferred markers elsewhere", () => {
+    expect(parsePromoSubject("LOB: AirPods\nPartner: Citrus\nPeriod: 28.09-04.10\nApple Watch 12", now).lob).toBe("AirPods");
+  });
+
+  it("parses and preserves the complete real multi-line feedback input", () => {
+    const input = [
+      "Lob: AirPods & Apple Watch (механіка в період Post NPI) Citrus.",
+      "Інформуємо вас про пролонгацію акційного тарифу Q4...",
+      "Partner: Citrus",
+      "Умови промо:",
+      "Період: 28.09-04.10",
+      "Промо модель і компенсація:",
+      "Apple Watch 12",
+      "Apple Watch Ultra 4",
+      "AirPods 5",
+      "AirPods 5 with Wireless Charging Case",
+    ].join("\n");
+    const result = parsePromoSubject(input, now);
+    expect(result).toMatchObject({ rawSubject: input, lob: "AW & AirPods", partner: "Citrus", startDate: "2026-09-28", endDate: "2026-10-04", isValid: true, warnings: [] });
+    expect(result.promoName).toBe("AirPods & Apple Watch (механіка в період Post NPI)");
+  });
+
+  it("parses the exact full-year production feedback subject", () => {
+    const input = "RE: Нова лінійка AirPods & Apple Watch ( Sellout 3 DAY NPI AirPods 5 & Apple Watch 12, ULTRA 4 ) - citrus 28.09.2026 - 04.10.2026";
+    expect(parsePromoSubject(input, now)).toMatchObject({ lob: "AW & AirPods", partner: "Citrus", startDate: "2026-09-28", endDate: "2026-10-04", isValid: true, warnings: [] });
+  });
 });

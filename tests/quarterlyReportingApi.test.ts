@@ -64,6 +64,14 @@ describe("quarterly reporting API", () => {
     expect(q4.body).toMatchObject({ promoCount: 1, expectedReports: 1, receivedReports: 1, ready: true });
   });
 
+  it("aggregates the composite AW & AirPods LOB generically in Q4 by endDate", async () => {
+    const { plm, citrus } = await dataset();
+    await prisma.promo.create({ data: { id: "composite", lob: "AW & AirPods", name: "AirPods & Apple Watch", normalizedName: "airpods apple watch", startDate: new Date("2026-09-28T00:00:00Z"), endDate: new Date("2026-10-04T00:00:00Z"), partners: { create: { id: "composite-citrus", partnerId: citrus.id, reportReceived: false, rawEmailSubject: "composite" } } } });
+    const response = await api().get("/api/reporting/summary").query({ year: 2026, quarter: 4, lob: "AW & AirPods" }).set(auth(plm));
+    expect(response.body).toMatchObject({ year: 2026, quarter: 4, lob: "AW & AirPods", promoCount: 1, expectedReports: 1, receivedReports: 0, pendingReports: 1, ready: false });
+    expect(response.body.pending[0]).toMatchObject({ promoId: "composite", partnerName: "Citrus" });
+  });
+
   it("keeps zero-data periods OPEN and not ready", async () => {
     const { plm } = await dataset();
     const response = await api().get("/api/reporting/summary").query({ year: 2025, quarter: 1, lob: "iPhone" }).set(auth(plm));

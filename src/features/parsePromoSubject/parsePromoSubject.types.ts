@@ -1,4 +1,4 @@
-export type Lob = "iPhone" | "AW" | "AirPods" | "Mac iPad" | "ACCY";
+export type Lob = "iPhone" | "AW" | "AirPods" | "AW & AirPods" | "Mac iPad" | "ACCY";
 
 export type ParsedPromoSubject = {
   rawSubject: string;

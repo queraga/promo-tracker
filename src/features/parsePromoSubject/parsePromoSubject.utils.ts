@@ -1,7 +1,7 @@
 import { LOB_RULES, PARTNER_ALIASES } from "./parsePromoSubject.config.js";
 import type { Lob } from "./parsePromoSubject.types.js";
 
-const DATE_RANGE_SOURCE = String.raw`(\d{1,2})\.(\d{1,2})\s*[-–]\s*(\d{1,2})\.(\d{1,2})`;
+const DATE_RANGE_SOURCE = String.raw`(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?\s*[-–]\s*(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?`;
 
 export type ResolvedPeriod = {
   startDate: string;
@@ -40,7 +40,9 @@ function isoDate(year: number, month: number, day: number): string {
 }
 
 export function extractDateRanges(subject: string, currentDate: Date): DateExtraction {
-  const matches = [...subject.matchAll(new RegExp(DATE_RANGE_SOURCE, "g"))];
+  const explicit = /^\s*(?:період|period)\s*:\s*(.+)$/imu.exec(subject);
+  const source = explicit?.[1] ?? subject;
+  const matches = [...source.matchAll(new RegExp(DATE_RANGE_SOURCE, "g"))];
   if (matches.length === 0) {
     return { period: null, warning: "Promo period could not be detected" };
   }
@@ -49,21 +51,22 @@ export function extractDateRanges(subject: string, currentDate: Date): DateExtra
   const periods: ResolvedPeriod[] = [];
 
   for (const match of matches) {
-    const [, startDayText, startMonthText, endDayText, endMonthText] = match;
+    const [, startDayText, startMonthText, explicitStartYear, endDayText, endMonthText, explicitEndYear] = match;
     const startDay = Number(startDayText);
     const startMonth = Number(startMonthText);
     const endDay = Number(endDayText);
     const endMonth = Number(endMonthText);
-    const endYear = endMonth < startMonth ? startYear + 1 : startYear;
+    const resolvedStartYear = explicitStartYear ? Number(explicitStartYear) : explicitEndYear ? Number(explicitEndYear) : startYear;
+    const endYear = explicitEndYear ? Number(explicitEndYear) : endMonth < startMonth ? resolvedStartYear + 1 : resolvedStartYear;
 
     if (
-      !isRealDate(startYear, startMonth, startDay) ||
+      !isRealDate(resolvedStartYear, startMonth, startDay) ||
       !isRealDate(endYear, endMonth, endDay)
     ) {
       return { period: null, warning: "Invalid promo period detected" };
     }
 
-    const startDate = isoDate(startYear, startMonth, startDay);
+    const startDate = isoDate(resolvedStartYear, startMonth, startDay);
     const endDate = isoDate(endYear, endMonth, endDay);
     if (endDate < startDate) {
       return { period: null, warning: "Invalid promo period detected" };
@@ -92,51 +95,60 @@ function normalizePartnerAlias(value: string): string {
   return value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
 
-function findPartnerMatch(subject: string): PartnerMatch | null {
+function allPartnerMatches(subject: string): PartnerMatch[] {
+  const matches: PartnerMatch[] = [];
   for (const [canonical, aliases] of Object.entries(PARTNER_ALIASES)) {
     const normalizedAliases = aliases
       .map(normalizePartnerAlias)
       .sort((left, right) => right.length - left.length);
     for (const alias of normalizedAliases) {
       const phrase = alias.split(" ").map(escapeRegExp).join(String.raw`[^\p{L}\p{N}]+`);
-      const suffix = new RegExp(
-        String.raw`(?:^|[^\p{L}\p{N}])(${phrase})[^\p{L}\p{N}]*$`,
-        "iu",
-      );
-      const match = suffix.exec(subject);
-      if (match) {
+      const boundaryMatch = new RegExp(String.raw`(?:^|[^\p{L}\p{N}])(${phrase})(?=$|[^\p{L}\p{N}])`, "giu");
+      for (const match of subject.matchAll(boundaryMatch)) {
         const offset = match[0].indexOf(match[1]);
-        return { canonical, start: match.index + offset, end: match.index + offset + match[1].length };
-      }
-
-      const beforeTrailingPeriod = new RegExp(
-        String.raw`(?:^|\s[-–]\s)(${phrase})(?=$|[^\p{L}\p{N}])(?:\s*\([^)]*\))?\s*[-–]\s*(?:(?:період|period)\s*)?\(?\s*${DATE_RANGE_SOURCE}\s*\)?\s*$`,
-        "iu",
-      );
-      const structuredMatch = beforeTrailingPeriod.exec(subject);
-      if (structuredMatch) {
-        const offset = structuredMatch[0].indexOf(structuredMatch[1]);
-        return { canonical, start: structuredMatch.index + offset, end: structuredMatch.index + offset + structuredMatch[1].length };
+        matches.push({ canonical, start: match.index + offset, end: match.index + offset + match[1].length });
       }
     }
   }
-  return null;
+  return matches.sort((left, right) => left.start - right.start || right.end - right.start - (left.end - left.start));
+}
+
+function findPartnerMatch(subject: string): PartnerMatch | null {
+  const matches = allPartnerMatches(subject);
+  const score = (match: PartnerMatch) => {
+    const before = subject.slice(0, match.start);
+    const after = subject.slice(match.end);
+    let value = 0;
+    if (/\s[-–]\s*$/u.test(before)) value += 4;
+    if (/^[\s.,;:()\-–]*$/u.test(after)) value += 4;
+    if (new RegExp(String.raw`^[^\p{L}\p{N}]*${DATE_RANGE_SOURCE}`, "iu").test(after)) value += 3;
+    if (new RegExp(String.raw`${DATE_RANGE_SOURCE}[^\p{L}\p{N}]*$`, "iu").test(before)) value += 3;
+    return value;
+  };
+  return matches.sort((left, right) => score(right) - score(left) || left.start - right.start)[0] ?? null;
 }
 
 export function extractPartner(subject: string): string | null {
+  const explicit = /^\s*(?:partner|партнер)\s*:\s*(.+)$/gimu.exec(subject);
+  if (explicit) {
+    const explicitPartner = findPartnerMatch(explicit[1])?.canonical;
+    if (explicitPartner) return explicitPartner;
+  }
   return findPartnerMatch(subject)?.canonical ?? null;
 }
 
-export function detectLob(subject: string): Lob | null {
+function matchesLobKeyword(subject: string, keyword: string): boolean {
+  const phrase = escapeRegExp(keyword).replace(/\s+/g, String.raw`\s+`);
+  return new RegExp(String.raw`(?:^|[^\p{L}\p{N}])${phrase}(?=$|[^\p{L}\p{N}])`, "iu").test(subject);
+}
+
+function inferLob(subject: string): Lob | null {
   const normalized = subject.toLocaleLowerCase();
+  const hasWatch = ["apple watch", "watch se", "watch series"].some((keyword) => matchesLobKeyword(normalized, keyword));
+  const hasAirPods = matchesLobKeyword(normalized, "airpods");
+  if (hasWatch && hasAirPods) return "AW & AirPods";
   for (const rule of LOB_RULES) {
-    const matchesKeyword = rule.keywords.some((keyword) => {
-      const phrase = escapeRegExp(keyword).replace(/\s+/g, String.raw`\s+`);
-      return new RegExp(
-        String.raw`(?:^|[^\p{L}\p{N}])${phrase}(?=$|[^\p{L}\p{N}])`,
-        "iu",
-      ).test(normalized);
-    });
+    const matchesKeyword = rule.keywords.some((keyword) => matchesLobKeyword(normalized, keyword));
     if (matchesKeyword) {
       return rule.lob;
     }
@@ -144,8 +156,18 @@ export function detectLob(subject: string): Lob | null {
   return null;
 }
 
+export function detectLob(subject: string): Lob | null {
+  const explicit = /^\s*lob\s*:\s*(.+)$/gimu.exec(subject);
+  if (explicit) {
+    const explicitLob = inferLob(explicit[1]);
+    if (explicitLob) return explicitLob;
+  }
+  return inferLob(subject);
+}
+
 export function buildPromoName(cleanedSubject: string, partner: string | null): string {
-  let result = cleanedSubject;
+  const lobLine = cleanedSubject.split(/\r?\n/u).find((line) => /^\s*lob\s*:/iu.test(line));
+  let result = lobLine ? lobLine.replace(/^\s*lob\s*:\s*/iu, "") : cleanedSubject;
 
   if (partner) {
     const match = findPartnerMatch(result);
@@ -162,10 +184,12 @@ export function buildPromoName(cleanedSubject: string, partner: string | null): 
   result = result.replace(periodWithDecoration, " ");
 
   return result
+    .replace(/^\s*(?:partner|партнер)\s*:.+$/gimu, " ")
+    .replace(/^\s*(?:період|period)\s*:.+$/gimu, " ")
     .replace(/\s+/gu, " ")
     .replace(/\s+([,;:])/gu, "$1")
     .trim()
-    .replace(/[\s\-–,;:]+$/u, "")
+    .replace(/[\s\-–,;:.]+$/u, "")
     .trim();
 }
 

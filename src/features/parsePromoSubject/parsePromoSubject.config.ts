@@ -46,7 +46,7 @@ export type LobRule = {
   keywords: readonly string[];
 };
 
-// First matching rule wins. Accessories intentionally take priority over devices.
+// First matching rule wins after composite LOB detection.
 export const LOB_RULES: readonly LobRule[] = [
   {
     lob: "ACCY",

@@ -22,14 +22,19 @@ const START_TEXT = `Promo Tracker
 /reports - звіти, які очікуються
 /help - допомога`;
 
-const HELP_TEXT = `1. Скопіюйте subject промо-листа.
-2. Надішліть його боту.
+export const HELP_TEXT = `Як додати промо:
+
+1. Надішліть subject промо-листа або текст з даними промо.
+2. Бот визначить LOB, партнера та період.
 3. Перевірте розпізнані дані.
 4. Натисніть Add для збереження.
 
+Якщо щось не розпізнано, додайте відсутні дані та надішліть повідомлення ще раз.
+
 Commands:
 /active
-/reports`;
+/reports
+/help`;
 
 export function createBot(token: string | undefined = process.env.TELEGRAM_BOT_TOKEN): Bot {
   if (!token?.trim()) throw new Error("TELEGRAM_BOT_TOKEN is required to start Promo Tracker bot");

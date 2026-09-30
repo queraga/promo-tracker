@@ -1,6 +1,6 @@
 import type { Partner, Promo, PromoPartner } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
-import { createBot } from "../src/bot/createBot.js";
+import { createBot, HELP_TEXT } from "../src/bot/createBot.js";
 import { formatActivePromos } from "../src/bot/formatters/formatActivePromos.js";
 import { formatPromoPreview } from "../src/bot/formatters/formatPromoPreview.js";
 import { formatPromoResult } from "../src/bot/formatters/formatPromoResult.js";
@@ -251,6 +251,22 @@ describe("Telegram bot workflows", () => {
 
   it("does not treat Telegram commands as promo subjects", () => {
     expect(handlePromoSubject("/active", identity, makeStore(), currentDate)).toEqual({ kind: "ignored" });
+  });
+
+  it("explains that promo data can be sent as a subject or text", () => {
+    expect(HELP_TEXT).toBe(`Як додати промо:
+
+1. Надішліть subject промо-листа або текст з даними промо.
+2. Бот визначить LOB, партнера та період.
+3. Перевірте розпізнані дані.
+4. Натисніть Add для збереження.
+
+Якщо щось не розпізнано, додайте відсутні дані та надішліть повідомлення ще раз.
+
+Commands:
+/active
+/reports
+/help`);
   });
 
   it("fails fast with a clear error when the token is missing", () => {

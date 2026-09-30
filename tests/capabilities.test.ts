@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { hasCapability, type UserCapability } from "../src/features/auth/capabilities.js";
 
-const capabilities: UserCapability[] = ["manageUsers", "managePartnerAssignments", "deletePromo", "deletePromoPartner", "mutateReportState", "expandPromoPartners"];
+const capabilities: UserCapability[] = ["manageUsers", "managePartnerAssignments", "deletePromo", "deletePromoPartner", "prolongPromo", "mutateReportState", "expandPromoPartners"];
 
 describe("role capabilities", () => {
   it("keeps PLM read-only even though its workspace scope is global", () => {

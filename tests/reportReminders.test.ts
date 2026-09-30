@@ -29,7 +29,7 @@ describe("report reminder date logic", () => {
 
 const createdAt = date("2026-08-01");
 function record(overrides: Partial<PromoPartner> = {}, partnerName = "Rozetka"): ReminderRecord {
-  const promo: Promo = { id: `promo-${partnerName}`, lob: "ACCY", name: "August Case Promo", normalizedName: "august case promo", startDate: date("2026-08-10"), endDate: date("2026-08-16"), createdAt, updatedAt: createdAt };
+  const promo: Promo = { id: `promo-${partnerName}`, lob: "ACCY", name: "August Case Promo", normalizedName: "august case promo", startDate: date("2026-08-10"), endDate: date("2026-08-16"), prolongedAt: null, createdAt, updatedAt: createdAt };
   const partner: Partner = { id: `partner-${partnerName}`, name: partnerName, createdAt, updatedAt: createdAt };
   return { id: `relation-${partnerName}`, promoId: promo.id, partnerId: partner.id, rawEmailSubject: "August Case Promo - Rozetka", reportReceived: false, reportReceivedAt: null, firstReminderSentAt: null, secondReminderSentAt: null, createdAt, updatedAt: createdAt, ...overrides, promo, partner };
 }

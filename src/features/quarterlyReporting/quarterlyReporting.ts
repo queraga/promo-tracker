@@ -13,7 +13,7 @@ export type QuarterlySummary = {
   partners: PartnerQuarterProgress[]; pending: PendingQuarterReport[];
 };
 export type ArchivedPeriod = QuarterlySummary & { id: string };
-export type ArchivedPeriodDetail = ArchivedPeriod & { promos: Array<{ id: string; lob: string; name: string; startDate: Date; endDate: Date; partners: Array<{ promoPartnerId: string; partnerId: string; partnerName: string; reportReceived: boolean; reportReceivedAt: Date | null; rawEmailSubject: string | null }> }> };
+export type ArchivedPeriodDetail = ArchivedPeriod & { promos: Array<{ id: string; lob: string; name: string; startDate: Date; endDate: Date; prolongedAt: Date | null; partners: Array<{ promoPartnerId: string; partnerId: string; partnerName: string; reportReceived: boolean; reportReceivedAt: Date | null; rawEmailSubject: string | null }> }> };
 
 export class EmptyReportingPeriodError extends Error { constructor() { super("Reporting period has no expected reports"); } }
 export class ReportingPeriodNotReadyError extends Error { constructor() { super("Reporting period still has pending reports"); } }
@@ -90,6 +90,6 @@ export async function getArchivedPeriod(id: string): Promise<ArchivedPeriodDetai
   });
   return {
     id, ...(await getQuarterlySummary(period.year, period.quarter, period.lob)),
-    promos: promos.map((promo) => ({ id: promo.id, lob: promo.lob, name: promo.name, startDate: promo.startDate, endDate: promo.endDate, partners: promo.partners.map((relation) => ({ promoPartnerId: relation.id, partnerId: relation.partnerId, partnerName: relation.partner.name, reportReceived: relation.reportReceived, reportReceivedAt: relation.reportReceivedAt, rawEmailSubject: relation.rawEmailSubject })) })),
+    promos: promos.map((promo) => ({ id: promo.id, lob: promo.lob, name: promo.name, startDate: promo.startDate, endDate: promo.endDate, prolongedAt: promo.prolongedAt, partners: promo.partners.map((relation) => ({ promoPartnerId: relation.id, partnerId: relation.partnerId, partnerName: relation.partner.name, reportReceived: relation.reportReceived, reportReceivedAt: relation.reportReceivedAt, rawEmailSubject: relation.rawEmailSubject })) })),
   };
 }

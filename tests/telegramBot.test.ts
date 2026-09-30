@@ -41,7 +41,7 @@ function records(start = "2026-09-07", end = "2026-09-13") {
   const promo: Promo = {
     id: "promo-1", lob: "iPhone", name: "Promo <iPhone>",
     normalizedName: "promo iphone", startDate: new Date(`${start}T00:00:00.000Z`),
-    endDate: new Date(`${end}T00:00:00.000Z`), createdAt, updatedAt: createdAt,
+    endDate: new Date(`${end}T00:00:00.000Z`), prolongedAt: null, createdAt, updatedAt: createdAt,
   };
   const partner: Partner = { id: "partner-1", name: "Rozetka & Co", createdAt, updatedAt: createdAt };
   const promoPartner: PromoPartner = {

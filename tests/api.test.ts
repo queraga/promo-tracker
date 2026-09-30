@@ -8,7 +8,7 @@ import { signAuthToken } from "../src/features/auth/authService.js";
 const now = new Date("2026-09-09T12:00:00.000Z"); const createdAt = new Date("2026-09-01T00:00:00.000Z"); const secret = "test-secret-that-is-at-least-32-characters";
 const user: User = { id: 1, email: "user@example.com", passwordHash: "unused", role: "KAM", isActive: true, createdAt, updatedAt: createdAt };
 const cookie = `${AUTH_COOKIE}=${signAuthToken(user, secret)}`;
-const promo: Promo = { id: "promo-1", lob: "AW", name: "Apple Watch Promo", normalizedName: "apple watch promo", startDate: new Date("2026-09-07T00:00:00Z"), endDate: new Date("2026-09-13T00:00:00Z"), createdAt, updatedAt: createdAt };
+const promo: Promo = { id: "promo-1", lob: "AW", name: "Apple Watch Promo", normalizedName: "apple watch promo", startDate: new Date("2026-09-07T00:00:00Z"), endDate: new Date("2026-09-13T00:00:00Z"), prolongedAt: null, createdAt, updatedAt: createdAt };
 const partner: Partner = { id: "partner-1", name: "Rozetka", createdAt, updatedAt: createdAt };
 const relation: PromoPartner = { id: "relation-1", promoId: promo.id, partnerId: partner.id, rawEmailSubject: "AW <Promo> - Rozetka", reportReceived: false, reportReceivedAt: null, firstReminderSentAt: null, secondReminderSentAt: null, createdAt, updatedAt: createdAt };
 const promoRecord = { ...promo, partners: [{ ...relation, partner }] }; const pendingRecord = { ...relation, promo, partner };

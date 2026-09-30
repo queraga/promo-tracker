@@ -1,0 +1,1 @@
+ALTER TABLE "Promo" ADD COLUMN "prolongedAt" DATETIME;

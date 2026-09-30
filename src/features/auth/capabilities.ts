@@ -5,6 +5,7 @@ export type UserCapability =
   | "managePartnerAssignments"
   | "deletePromo"
   | "deletePromoPartner"
+  | "prolongPromo"
   | "mutateReportState"
   | "expandPromoPartners"
   | "viewQuarterlyReporting"
@@ -12,7 +13,7 @@ export type UserCapability =
   | "viewArchive";
 
 const roleCapabilities: Record<UserRole, ReadonlySet<UserCapability>> = {
-  SUPERUSER: new Set(["manageUsers", "managePartnerAssignments", "deletePromo", "deletePromoPartner", "mutateReportState", "expandPromoPartners", "viewQuarterlyReporting", "viewArchive"]),
+  SUPERUSER: new Set(["manageUsers", "managePartnerAssignments", "deletePromo", "deletePromoPartner", "prolongPromo", "mutateReportState", "expandPromoPartners", "viewQuarterlyReporting", "viewArchive"]),
   PLM: new Set(["viewQuarterlyReporting", "closeReportingPeriod", "viewArchive"]),
   KAM: new Set(["mutateReportState", "expandPromoPartners"]),
 };

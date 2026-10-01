@@ -1,0 +1,35 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { applyProlongationResult } from "../App";
+import { ApiError, prolongPromo } from "../shared/api/client";
+import type { ArchivedPeriodDetail, CurrentUser, PromoDto } from "../types";
+import { ArchiveDetail } from "./ArchivePage";
+import { MobilePartnerFeed } from "./MobilePartnerFeed";
+import { PromoDrawer } from "./PromoDrawer";
+import { getProlongationPreview, ProlongationDialog, prolongationErrorMessage } from "./PromoProlongation";
+import { TrackerTable } from "./TrackerTable";
+
+const promo = (overrides: Partial<PromoDto> = {}): PromoDto => ({ id: "promo-1", lob: "iPhone", name: "August Promo Iphone Case Air", startDate: "2026-08-17T00:00:00.000Z", endDate: "2026-09-28T00:00:00.000Z", prolongedAt: null, status: "active", partners: [{ promoPartnerId: "pp-1", partnerId: "rozetka", partnerName: "Rozetka", reportReceived: false, reportReceivedAt: null, rawEmailSubject: null }], ...overrides });
+const user = (role: CurrentUser["role"]): CurrentUser => ({ id: 1, email: `${role.toLowerCase()}@example.com`, role });
+const drawer = (role: CurrentUser["role"]) => renderToStaticMarkup(<PromoDrawer promo={promo()} user={user(role)} busyId={null} onClose={vi.fn()} onToggle={vi.fn()} onDeletePromo={vi.fn()} onRemovePartner={vi.fn()} onExpanded={vi.fn()} onProlonged={vi.fn()} onError={vi.fn()} />);
+const dialog = (endDate = "", submitting = false, error = "") => renderToStaticMarkup(<ProlongationDialog promo={promo()} endDate={endDate} submitting={submitting} error={error} onEndDateChange={vi.fn()} onCancel={vi.fn()} onConfirm={vi.fn()} />);
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("M11.2 promo prolongation dashboard UX", () => {
+  it("shows the action only to SUPERUSER", () => { expect(drawer("SUPERUSER")).toContain("Пролонгація"); expect(drawer("PLM")).not.toContain("Пролонгація"); expect(drawer("KAM")).not.toContain("Пролонгація"); });
+  it("shows the current promo name and period in the dialog", () => { const html = dialog(); expect(html).toContain("August Promo Iphone Case Air"); expect(html).toContain("17.08.2026"); expect(html).toContain("28.09.2026"); });
+  it("blocks an unchanged or earlier date", () => { expect(getProlongationPreview(promo(), "2026-09-28")).toBeNull(); expect(getProlongationPreview(promo(), "2026-09-27")).toBeNull(); expect(dialog("2026-09-28")).toContain('disabled=""'); });
+  it("previews a same-quarter extension", () => { expect(getProlongationPreview(promo({ startDate: "2026-09-03", endDate: "2026-09-28" }), "2026-09-30")).toEqual({ kind: "extended", startDate: "2026-09-03", endDate: "2026-09-30" }); expect(dialog("2026-09-30")).toContain("Новий період"); });
+  it("previews a Q3 to Q4 split at the exact boundary", () => { expect(getProlongationPreview(promo(), "2026-10-12")).toEqual({ kind: "split", currentQuarter: 3, currentStart: "2026-08-17", currentEnd: "2026-09-30", nextQuarter: 4, nextStart: "2026-10-01", nextEnd: "2026-10-12" }); const html = dialog("2026-10-12"); expect(html).toContain("Промо буде розділено"); expect(html).toContain("Q3"); expect(html).toContain("Q4"); });
+  it("previews a Q4 to Q1 next-year split", () => expect(getProlongationPreview(promo({ startDate: "2026-12-01", endDate: "2026-12-29" }), "2027-01-12")).toEqual({ kind: "split", currentQuarter: 4, currentStart: "2026-12-01", currentEnd: "2026-12-31", nextQuarter: 1, nextStart: "2027-01-01", nextEnd: "2027-01-12" }));
+  it("posts the selected date to the M11 endpoint", async () => { const result = { kind: "extended" as const, promo: promo({ endDate: "2026-09-30", prolongedAt: "2026-09-29T10:00:00.000Z" }) }; const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => result }); vi.stubGlobal("fetch", fetch); await expect(prolongPromo("promo-1", "2026-09-30")).resolves.toEqual(result); expect(fetch).toHaveBeenCalledWith("/api/promos/promo-1/prolong", expect.objectContaining({ method: "POST", body: JSON.stringify({ endDate: "2026-09-30" }) })); });
+  it("prevents duplicate confirmation while pending", () => { const html = dialog("2026-09-30", true); expect(html).toContain("Збереження…"); expect((html.match(/disabled=""/g) ?? []).length).toBeGreaterThanOrEqual(2); });
+  it("applies an extended response without changing unrelated promos", () => { const other = promo({ id: "other" }); const updated = promo({ endDate: "2026-09-30", prolongedAt: "2026-09-29T10:00:00.000Z" }); expect(applyProlongationResult([promo(), other], { kind: "extended", promo: updated })).toEqual([updated, other]); });
+  it("applies both rows from a split response", () => { const currentPromo = promo({ endDate: "2026-09-30", prolongedAt: "2026-09-29T10:00:00.000Z" }); const continuationPromo = promo({ id: "continuation", startDate: "2026-10-01", endDate: "2026-10-12", prolongedAt: currentPromo.prolongedAt }); expect(applyProlongationResult([promo()], { kind: "split", currentPromo, continuationPromo })).toEqual([currentPromo, continuationPromo]); });
+  it("renders metadata badge only from prolongedAt on desktop", () => { expect(renderToStaticMarkup(<TrackerTable promos={[promo({ prolongedAt: "2026-09-29T10:00:00.000Z" })]} partners={[]} onSelect={vi.fn()} />)).toContain("Prolonged"); expect(renderToStaticMarkup(<TrackerTable promos={[promo()]} partners={[]} onSelect={vi.fn()} />)).not.toContain("Prolonged"); });
+  it("does not infer the badge from an ordinary cross-quarter period", () => expect(renderToStaticMarkup(<TrackerTable promos={[promo({ startDate: "2026-09-25", endDate: "2026-10-04", prolongedAt: null })]} partners={[]} onSelect={vi.fn()} />)).not.toContain("Prolonged"));
+  it("renders the badge in the mobile partner feed", () => expect(renderToStaticMarkup(<MobilePartnerFeed promos={[promo({ prolongedAt: "2026-09-29T10:00:00.000Z" })]} partners={["Rozetka"]} selectedPartner="Rozetka" pendingOnly={false} onPartnerChange={vi.fn()} onSelect={vi.fn()} />)).toContain("Prolonged"));
+  it("renders archived prolongation metadata without an action", () => { const period: ArchivedPeriodDetail = { id: "period-1", year: 2026, quarter: 3, lob: "iPhone", status: "CLOSED", ready: false, closedAt: "2026-10-01", closedBy: null, promoCount: 1, expectedReports: 1, receivedReports: 1, pendingReports: 0, completionPercentage: 100, partners: [], pending: [], promos: [{ id: "promo-1", lob: "iPhone", name: "Promo", startDate: "2026-09-01", endDate: "2026-09-30", prolongedAt: "2026-09-29T10:00:00.000Z", partners: [] }] }; const html = renderToStaticMarkup(<ArchiveDetail period={period} />); expect(html).toContain("Prolonged"); expect(html).not.toContain("Пролонгація"); });
+  it.each([[400, "пізнішу дату"], [403, "немає прав"], [404, "більше недоступне"], [409, "квартал уже закрито"]])("maps backend %s to safe Ukrainian UX", (status, message) => expect(prolongationErrorMessage(new ApiError(status as number, "technical internals"))).toContain(message));
+});

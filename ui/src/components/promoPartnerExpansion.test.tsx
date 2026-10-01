@@ -10,7 +10,7 @@ const options: PromoPartnerOption[] = [
   { id: "ispace", name: "iSpace", alreadyAssociated: false },
   { id: "ktc", name: "KTC", alreadyAssociated: false },
 ];
-const promo: PromoDto = { id: "promo-1", lob: "ACCY", name: "Neutral promo", startDate: "2026-09-01", endDate: "2026-09-02", status: "finished", partners: [
+const promo: PromoDto = { id: "promo-1", lob: "ACCY", name: "Neutral promo", startDate: "2026-09-01", endDate: "2026-09-02", status: "finished", prolongedAt: null, partners: [
   { promoPartnerId: "r1", partnerId: "kibernetiki", partnerName: "Kibernetiki", reportReceived: false, reportReceivedAt: null, rawEmailSubject: "Real Kibernetiki subject" },
   { promoPartnerId: "r2", partnerId: "ispace", partnerName: "iSpace", reportReceived: false, reportReceivedAt: null, rawEmailSubject: null },
 ] };
@@ -19,7 +19,7 @@ const dialog = (overrides: Partial<ComponentProps<typeof PartnerExpansionDialog>
 
 describe("promo partner expansion UI", () => {
   it("renders the drawer action for KAM and keeps real/manual subject ownership distinct", () => {
-    const html = renderToStaticMarkup(<PromoDrawer promo={promo} user={user} busyId={null} onClose={vi.fn()} onToggle={vi.fn()} onDeletePromo={vi.fn()} onRemovePartner={vi.fn()} onExpanded={vi.fn()} onError={vi.fn()} />);
+    const html = renderToStaticMarkup(<PromoDrawer promo={promo} user={user} busyId={null} onClose={vi.fn()} onToggle={vi.fn()} onDeletePromo={vi.fn()} onRemovePartner={vi.fn()} onExpanded={vi.fn()} onProlonged={vi.fn()} onError={vi.fn()} />);
     expect(html).toContain("Додати партнерів");
     expect(html).toContain("Real Kibernetiki subject");
     expect(html).toContain("Додано вручну");
@@ -50,7 +50,7 @@ describe("promo partner expansion UI", () => {
   it("shows a clear state when no partners remain", () => expect(dialog({ options: [options[0]] })).toContain("Усі доступні партнери вже додані до промо."));
   it("replaces the expanded promo in workspace state without reloading unrelated rows", () => {
     const other = { ...promo, id: "promo-2", name: "Other" };
-    const updated = { ...promo, partners: [...promo.partners, { promoPartnerId: "r3", partnerId: "ktc", partnerName: "KTC", reportReceived: false, reportReceivedAt: null, rawEmailSubject: null }] };
+    const updated = { ...promo, prolongedAt: null, partners: [...promo.partners, { promoPartnerId: "r3", partnerId: "ktc", partnerName: "KTC", reportReceived: false, reportReceivedAt: null, rawEmailSubject: null }] };
     expect(replaceWorkspacePromo([promo, other], updated)).toEqual([updated, other]);
   });
 });

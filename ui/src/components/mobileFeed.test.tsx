@@ -4,7 +4,7 @@ import { getPartnerFeed, MobilePartnerFeed } from "./MobilePartnerFeed";
 import type { PromoDto, PromoStatus } from "../types";
 
 const promo = (id: string, partnerName: string, status: PromoStatus, reportReceived = false): PromoDto => ({
-  id, lob: "iPhone", name: `Promo ${id}`, startDate: "2026-09-01", endDate: "2026-09-10", status,
+  id, lob: "iPhone", name: `Promo ${id}`, startDate: "2026-09-01", endDate: "2026-09-10", prolongedAt: null, status,
   partners: [{ promoPartnerId: `relation-${id}`, partnerId: `partner-${partnerName}`, partnerName, reportReceived, reportReceivedAt: reportReceived ? "2026-09-11" : null, rawEmailSubject: `Promo ${id}` }],
 });
 const promos = [promo("active", "Rozetka", "active"), promo("pending", "Rozetka", "finished"), promo("received", "Rozetka", "finished", true), promo("other", "Comfy", "finished")];

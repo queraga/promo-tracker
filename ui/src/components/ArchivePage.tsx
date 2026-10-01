@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { getArchive, getArchivedPeriod } from "../shared/api/client";
 import type { ArchivedPeriod, ArchivedPeriodDetail } from "../types";
+import { ProlongedBadge } from "./PromoProlongation";
 
 const date = (value: string) => new Intl.DateTimeFormat("uk-UA").format(new Date(value));
-export function ArchiveDetail({ period }: { period: ArchivedPeriodDetail }) { return <section className="archive-detail"><header><h2>Q{period.quarter} {period.year} · {period.lob}</h2><p>Дані доступні лише для перегляду</p></header>{period.promos.map((promo) => <article key={promo.id}><div><strong>{promo.name}</strong><span>{date(promo.startDate)} – {date(promo.endDate)}</span></div><ul>{promo.partners.map((partner) => <li key={partner.promoPartnerId}>{partner.partnerName}<span>{partner.reportReceived ? "Звіт отримано ✓" : "Звіт очікується"}</span></li>)}</ul></article>)}</section>; }
+export function ArchiveDetail({ period }: { period: ArchivedPeriodDetail }) { return <section className="archive-detail"><header><h2>Q{period.quarter} {period.year} · {period.lob}</h2><p>Дані доступні лише для перегляду</p></header>{period.promos.map((promo) => <article key={promo.id}><div><strong className="promo-name-with-metadata">{promo.name}<ProlongedBadge prolongedAt={promo.prolongedAt} /></strong><span>{date(promo.startDate)} – {date(promo.endDate)}</span></div><ul>{promo.partners.map((partner) => <li key={partner.promoPartnerId}>{partner.partnerName}<span>{partner.reportReceived ? "Звіт отримано ✓" : "Звіт очікується"}</span></li>)}</ul></article>)}</section>; }
 export function ArchivePage({ onError }: { onError: (message: string) => void }) {
   const [periods, setPeriods] = useState<ArchivedPeriod[]>([]); const [detail, setDetail] = useState<ArchivedPeriodDetail | null>(null); const [loading, setLoading] = useState(true);
   useEffect(() => { getArchive().then(setPeriods).catch((e) => onError(e.message)).finally(() => setLoading(false)); }, [onError]);

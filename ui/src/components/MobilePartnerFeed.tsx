@@ -1,5 +1,6 @@
 import type { PromoDto, PromoStatus } from "../types";
 import { sortPromos } from "../shared/lib/tracker";
+import { ProlongedBadge } from "./PromoProlongation";
 
 const labels: Record<PromoStatus, string> = { active: "Активне", planned: "Заплановане", finished: "Завершене" };
 const formatDate = (value: string) => new Intl.DateTimeFormat("uk-UA", { day: "2-digit", month: "2-digit", timeZone: "UTC" }).format(new Date(value));
@@ -24,7 +25,7 @@ export function MobilePartnerFeed({ promos, partners, selectedPartner, pendingOn
       const report = relation.reportReceived ? "✓ Звіт отримано" : promo.status === "finished" ? "⚠ Очікується звіт" : "Звіт ще не очікується";
       return <button type="button" className="promo-card" key={promo.id} onClick={() => onSelect(promo.id)}>
         <span className="promo-card-top"><strong>{promo.lob}</strong><span className={`badge ${promo.status}`}>{labels[promo.status]}</span></span>
-        <span className="promo-card-name">{promo.name}</span>
+        <span className="promo-card-name promo-name-with-metadata">{promo.name}<ProlongedBadge prolongedAt={promo.prolongedAt} /></span>
         <span className="promo-card-period">{formatDate(promo.startDate)}–{formatDate(promo.endDate)}</span>
         <span className={`promo-card-report${relation.reportReceived ? " received" : promo.status === "finished" ? " pending" : ""}`}>{report}</span>
       </button>;

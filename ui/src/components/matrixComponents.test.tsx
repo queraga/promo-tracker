@@ -4,7 +4,7 @@ import { PartnerColumnSelector } from "./PartnerColumnSelector";
 import { TrackerTable } from "./TrackerTable";
 import type { PromoDto } from "../types";
 
-const promo: PromoDto = { id: "promo-1", lob: "AW", name: "Watch Promo", startDate: "2026-09-01", endDate: "2026-09-02", status: "finished", partners: [{ promoPartnerId: "relation-1", partnerId: "partner-1", partnerName: "Rozetka", reportReceived: false, reportReceivedAt: null, rawEmailSubject: "Watch Promo" }] };
+const promo: PromoDto = { id: "promo-1", lob: "AW", name: "Watch Promo", startDate: "2026-09-01", endDate: "2026-09-02", status: "finished", prolongedAt: null, partners: [{ promoPartnerId: "relation-1", partnerId: "partner-1", partnerName: "Rozetka", reportReceived: false, reportReceivedAt: null, rawEmailSubject: "Watch Promo" }] };
 
 describe("desktop matrix components", () => {
   it("marks all four context columns as sticky", () => {

@@ -3,7 +3,7 @@ import type { CurrentUser, PromoDto } from "../../types";
 import { canExpandPromoPartners, canManagePromos, canMutateReports, removePartnerFromState, removePromoFromState } from "./admin";
 
 const user = (role: CurrentUser["role"]): CurrentUser => ({ id: 1, email: "user@example.com", role });
-const promos: PromoDto[] = [{ id: "promo-1", lob: "AW", name: "Promo", startDate: "2026-09-01", endDate: "2026-09-02", status: "finished", partners: [{ promoPartnerId: "relation-1", partnerId: "partner-1", partnerName: "Rozetka", reportReceived: false, reportReceivedAt: null, rawEmailSubject: "Promo" }, { promoPartnerId: "relation-2", partnerId: "partner-2", partnerName: "MOYO", reportReceived: false, reportReceivedAt: null, rawEmailSubject: "Promo" }] }];
+const promos: PromoDto[] = [{ id: "promo-1", lob: "AW", name: "Promo", startDate: "2026-09-01", endDate: "2026-09-02", status: "finished", prolongedAt: null, partners: [{ promoPartnerId: "relation-1", partnerId: "partner-1", partnerName: "Rozetka", reportReceived: false, reportReceivedAt: null, rawEmailSubject: "Promo" }, { promoPartnerId: "relation-2", partnerId: "partner-2", partnerName: "MOYO", reportReceived: false, reportReceivedAt: null, rawEmailSubject: "Promo" }] }];
 
 describe("admin UI logic", () => {
   it("hides admin controls from KAM", () => expect(canManagePromos(user("KAM"))).toBe(false));

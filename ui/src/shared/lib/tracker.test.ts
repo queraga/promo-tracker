@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PromoDto } from "../../types";
 import { countPendingReports, filterPromos, getPartnerCellState, getPartnerColumns, getVisiblePartnerColumns, sortPromos } from "./tracker";
-const promo = (id: string, status: PromoDto["status"], lob: string, name: string, partnerName: string): PromoDto => ({ id, status, lob, name, startDate: `2026-09-0${id}T00:00:00.000Z`, endDate: "2026-09-13T00:00:00.000Z", partners: [{ promoPartnerId: `r-${id}`, partnerId: `p-${id}`, partnerName, reportReceived: false, reportReceivedAt: null, rawEmailSubject: name }] });
+const promo = (id: string, status: PromoDto["status"], lob: string, name: string, partnerName: string): PromoDto => ({ id, status, lob, name, startDate: `2026-09-0${id}T00:00:00.000Z`, endDate: "2026-09-13T00:00:00.000Z", prolongedAt: null, partners: [{ promoPartnerId: `r-${id}`, partnerId: `p-${id}`, partnerName, reportReceived: false, reportReceivedAt: null, rawEmailSubject: name }] });
 const promos = [promo("1", "finished", "AW", "Watch campaign", "Rozetka"), promo("2", "planned", "Mac iPad", "Back to School", "MOYO"), promo("3", "active", "iPhone", "September Phone", "Foxtrot")];
 const empty = { search: "", lob: "", status: "", partner: "" };
 describe("tracker UI logic", () => {

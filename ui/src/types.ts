@@ -1,6 +1,7 @@
 export type PromoStatus = "planned" | "active" | "finished";
 export type PromoPartnerDto = { promoPartnerId: string; partnerId: string; partnerName: string; reportReceived: boolean; reportReceivedAt: string | null; rawEmailSubject: string | null };
-export type PromoDto = { id: string; lob: string; name: string; startDate: string; endDate: string; status: PromoStatus; partners: PromoPartnerDto[] };
+export type PromoDto = { id: string; lob: string; name: string; startDate: string; endDate: string; prolongedAt: string | null; status: PromoStatus; partners: PromoPartnerDto[] };
+export type ProlongPromoResult = { kind: "extended"; promo: PromoDto } | { kind: "split"; currentPromo: PromoDto; continuationPromo: PromoDto };
 export type PromoPartnerOption = { id: string; name: string; alreadyAssociated: boolean };
 export type Filters = { search: string; lob: string; status: string; partner: string };
 export type CurrentUser = { id: number; email: string; role: "KAM" | "PLM" | "SUPERUSER" };
@@ -12,5 +13,5 @@ export type PendingQuarterReport = { promoPartnerId: string; promoId: string; pr
 export type PartnerQuarterProgress = { partnerId: string; partnerName: string; expectedReports: number; receivedReports: number; pendingReports: number; pending: PendingQuarterReport[] };
 export type QuarterlySummary = { year: number; quarter: number; lob: string; status: "OPEN" | "CLOSED"; ready: boolean; closedAt: string | null; closedBy: { id: number; email: string } | null; promoCount: number; expectedReports: number; receivedReports: number; pendingReports: number; completionPercentage: number; partners: PartnerQuarterProgress[]; pending: PendingQuarterReport[] };
 export type ArchivedPeriod = QuarterlySummary & { id: string };
-export type ArchivedPromo = { id: string; lob: string; name: string; startDate: string; endDate: string; partners: PromoPartnerDto[] };
+export type ArchivedPromo = { id: string; lob: string; name: string; startDate: string; endDate: string; prolongedAt: string | null; partners: PromoPartnerDto[] };
 export type ArchivedPeriodDetail = ArchivedPeriod & { promos: ArchivedPromo[] };

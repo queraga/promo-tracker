@@ -12,11 +12,12 @@ import { deletePromo, getCurrentUser, getPartners, getPromo, getPromos, logout, 
 import { removePartnerFromState, removePromoFromState } from "./shared/lib/admin";
 import { countPendingReports, filterPromos, getPartnerColumns, getVisiblePartnerColumns, sortPromos } from "./shared/lib/tracker";
 import { readMobilePartner, readPartnerColumns, reconcileMobilePartner, reconcilePartnerColumns, reconcilePartnerFilter, writeMobilePartner, writePartnerColumns } from "./shared/lib/preferences";
-import type { CurrentUser, Filters, ManagedUser, PromoDto } from "./types";
+import type { CurrentUser, Filters, ManagedUser, PromoDto, ProlongPromoResult } from "./types";
 
 const initialFilters: Filters = { search: "", lob: "", status: "", partner: "" };
 type Page = "tracker" | "users" | "quarterly" | "archive";
 export const replaceWorkspacePromo = (promos: PromoDto[], updated: PromoDto) => promos.map((promo) => promo.id === updated.id ? updated : promo);
+export const applyProlongationResult = (promos: PromoDto[], result: ProlongPromoResult) => result.kind === "extended" ? replaceWorkspacePromo(promos, result.promo) : [...replaceWorkspacePromo(promos, result.currentPromo), result.continuationPromo];
 
 export function SidebarNavigation({ role, page, pendingOnly, pending, onOverview, onPending, onUsers, onQuarterly, onArchive }: { role: CurrentUser["role"]; page: Page; pendingOnly: boolean; pending: number; onOverview: () => void; onPending: () => void; onUsers: () => void; onQuarterly: () => void; onArchive: () => void }) {
   return <nav aria-label="Основна навігація">
@@ -103,6 +104,11 @@ export default function App() {
     setSelected(updated);
     await refreshPartners();
   };
+  const applyProlongation = async (result: ProlongPromoResult) => {
+    setPromos((current) => applyProlongationResult(current, result));
+    setSelected(null);
+    await refreshPartners();
+  };
   const removePartner = async (promo: PromoDto, partnerId: string, partnerName: string) => {
     if (!window.confirm(`Видалити ${partnerName} з промо “${promo.name}”? Сам партнер залишиться в базі.`)) return;
     try { await removePromoPartner(promo.id, partnerId); setPromos((current) => removePartnerFromState(current, promo.id, partnerId)); setSelected((current) => current ? removePartnerFromState([current], promo.id, partnerId)[0] : null); await refreshPartners(); }
@@ -144,6 +150,6 @@ export default function App() {
       </>}
     </main>
     {error && <div className="error app-error" role="alert">{error}<button onClick={() => setError("")} aria-label="Закрити помилку">×</button></div>}
-    {selected && <PromoDrawer promo={selected} user={user} busyId={busyId} onClose={() => setSelected(null)} onToggle={toggleReport} onDeletePromo={removePromo} onRemovePartner={removePartner} onExpanded={(updated) => void applyExpandedPromo(updated)} onError={setError} />}
+    {selected && <PromoDrawer promo={selected} user={user} busyId={busyId} onClose={() => setSelected(null)} onToggle={toggleReport} onDeletePromo={removePromo} onRemovePartner={removePartner} onExpanded={(updated) => void applyExpandedPromo(updated)} onProlonged={(result) => void applyProlongation(result)} onError={setError} />}
   </div>;
 }

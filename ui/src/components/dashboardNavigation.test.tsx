@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { DashboardSummary, SidebarNavigation } from "../App";
 import type { PromoDto, PromoStatus } from "../types";
 
-const promo = (id: string, status: PromoStatus, partnerName = "Rozetka", reportReceived = false): PromoDto => ({ id, status, lob: "AW", name: `Promo ${id}`, startDate: "2026-09-01", endDate: "2026-09-02", partners: [{ promoPartnerId: `relation-${id}-${partnerName}`, partnerId: `partner-${partnerName}`, partnerName, reportReceived, reportReceivedAt: null, rawEmailSubject: `Promo ${id}` }] });
+const promo = (id: string, status: PromoStatus, partnerName = "Rozetka", reportReceived = false): PromoDto => ({ id, status, lob: "AW", name: `Promo ${id}`, startDate: "2026-09-01", endDate: "2026-09-02", prolongedAt: null, partners: [{ promoPartnerId: `relation-${id}-${partnerName}`, partnerId: `partner-${partnerName}`, partnerName, reportReceived, reportReceivedAt: null, rawEmailSubject: `Promo ${id}` }] });
 const navigation = (role: "KAM" | "PLM" | "SUPERUSER") => renderToStaticMarkup(<SidebarNavigation role={role} page="tracker" pendingOnly={false} pending={2} onOverview={vi.fn()} onPending={vi.fn()} onUsers={vi.fn()} onQuarterly={vi.fn()} onArchive={vi.fn()} />);
 
 describe("dashboard summary and navigation", () => {

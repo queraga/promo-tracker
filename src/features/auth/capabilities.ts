@@ -6,6 +6,7 @@ export type UserCapability =
   | "deletePromo"
   | "deletePromoPartner"
   | "prolongPromo"
+  | "prolongAssignedPromoPartners"
   | "mutateReportState"
   | "expandPromoPartners"
   | "viewQuarterlyReporting"
@@ -15,7 +16,7 @@ export type UserCapability =
 const roleCapabilities: Record<UserRole, ReadonlySet<UserCapability>> = {
   SUPERUSER: new Set(["manageUsers", "managePartnerAssignments", "deletePromo", "deletePromoPartner", "prolongPromo", "mutateReportState", "expandPromoPartners", "viewQuarterlyReporting", "viewArchive"]),
   PLM: new Set(["viewQuarterlyReporting", "closeReportingPeriod", "viewArchive"]),
-  KAM: new Set(["mutateReportState", "expandPromoPartners"]),
+  KAM: new Set(["prolongAssignedPromoPartners", "mutateReportState", "expandPromoPartners"]),
 };
 
 export const hasCapability = (role: UserRole, capability: UserCapability): boolean => roleCapabilities[role].has(capability);

@@ -97,6 +97,72 @@ describe("M11.3a scoped prolongation domain", () => {
     expect(await prisma.promoPartner.findUniqueOrThrow({ where: { id: "rel-rozetka" } })).toMatchObject({ promoId: current.id, reportReceived: true });
   });
 
+  it("marks a partial-selection source when it is already the current-quarter segment", async () => {
+    const { promo, kamA } = await fixture();
+    await prisma.promoPartner.delete({ where: { id: "rel-citrus" } });
+    await prisma.promo.update({ where: { id: promo.id }, data: { endDate: date("2026-09-30") } });
+    const before = await prisma.promoPartner.findUniqueOrThrow({ where: { id: "rel-rozetka" } });
+
+    await prolongAssignedPromoPartners(promo.id, [before.id], "2026-10-12", kamA.id, now);
+
+    const current = await prisma.promo.findUniqueOrThrow({ where: { id: promo.id }, include: { partners: true } });
+    expect(current).toMatchObject({ startDate: date("2026-09-03"), endDate: date("2026-09-30"), prolongedAt: now });
+    expect(current.partners.map(({ id }) => id).sort()).toEqual(["rel-allo", "rel-comfy", "rel-rozetka"]);
+    expect(current.partners.find(({ id }) => id === before.id)).toMatchObject({
+      id: before.id,
+      promoId: promo.id,
+      rawEmailSubject: before.rawEmailSubject,
+      reportReceived: before.reportReceived,
+      reportReceivedAt: before.reportReceivedAt,
+      firstReminderSentAt: before.firstReminderSentAt,
+      secondReminderSentAt: before.secondReminderSentAt,
+    });
+
+    const continuation = await prisma.promo.findUniqueOrThrow({
+      where: { lob_normalizedName_startDate_endDate: { lob: promo.lob, normalizedName: promo.normalizedName, startDate: date("2026-10-01"), endDate: date("2026-10-12") } },
+      include: { partners: true },
+    });
+    expect(continuation.prolongedAt).toEqual(now);
+    expect(continuation.partners).toHaveLength(1);
+    expect(continuation.partners[0]).toMatchObject({
+      partnerId: "m113-rozetka",
+      rawEmailSubject: null,
+      reportReceived: false,
+      reportReceivedAt: null,
+      firstReminderSentAt: null,
+      secondReminderSentAt: null,
+    });
+    expect(continuation.partners[0].id).not.toBe(before.id);
+  });
+
+  it("does not decrease a later marker on the source/current-quarter segment", async () => {
+    const { promo, kamA } = await fixture();
+    await prisma.promoPartner.delete({ where: { id: "rel-citrus" } });
+    await prisma.promo.update({ where: { id: promo.id }, data: { endDate: date("2026-09-30"), prolongedAt: new Date("2026-09-29T18:00:00Z") } });
+
+    await prolongAssignedPromoPartners(promo.id, ["rel-rozetka"], "2026-10-12", kamA.id, now);
+
+    expect(await prisma.promo.findUniqueOrThrow({ where: { id: promo.id } })).toMatchObject({ prolongedAt: new Date("2026-09-29T18:00:00Z") });
+  });
+
+  it("leaves a distinct partial source marker unchanged while marking both split targets", async () => {
+    const { promo, kamA } = await fixture();
+    const previousMarker = new Date("2026-09-27T12:00:00Z");
+    await prisma.promo.update({ where: { id: promo.id }, data: { prolongedAt: previousMarker } });
+
+    await prolongAssignedPromoPartners(promo.id, ["rel-rozetka"], "2026-10-12", kamA.id, now);
+
+    expect(await prisma.promo.findUniqueOrThrow({ where: { id: promo.id } })).toMatchObject({ endDate: date("2026-09-28"), prolongedAt: previousMarker });
+    const currentTarget = await prisma.promo.findUniqueOrThrow({
+      where: { lob_normalizedName_startDate_endDate: { lob: promo.lob, normalizedName: promo.normalizedName, startDate: promo.startDate, endDate: date("2026-09-30") } },
+    });
+    const continuation = await prisma.promo.findUniqueOrThrow({
+      where: { lob_normalizedName_startDate_endDate: { lob: promo.lob, normalizedName: promo.normalizedName, startDate: date("2026-10-01"), endDate: date("2026-10-12") } },
+    });
+    expect(currentTarget.prolongedAt).toEqual(now);
+    expect(continuation.prolongedAt).toEqual(now);
+  });
+
   it("consolidates sequential actions independent of KAM order", async () => {
     const first = await fixture();
     await prolongAssignedPromoPartners(first.promo.id, ["rel-rozetka", "rel-comfy"], "2026-10-12", first.kamA.id, now);

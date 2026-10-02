@@ -177,7 +177,7 @@ export async function prolongAssignedPromoPartners(
       const conflictTargetIds = [continuationTarget.id, ...(currentTarget.id === source.id ? [] : [currentTarget.id])];
       await assertNoTargetPartnerConflict(tx, conflictTargetIds, selectedPartnerIds);
 
-      if (currentTarget.id === source.id && allActualSelected && (!source.prolongedAt || source.prolongedAt < requestTime)) {
+      if (currentTarget.id === source.id && (!source.prolongedAt || source.prolongedAt < requestTime)) {
         await tx.promo.update({ where: { id: source.id }, data: { prolongedAt: requestTime } });
       }
 

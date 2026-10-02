@@ -64,6 +64,7 @@ export const LOB_RULES: readonly LobRule[] = [
   },
   { lob: "AW", keywords: ["apple watch", "watch se", "watch series"] },
   { lob: "AirPods", keywords: ["airpods"] },
-  { lob: "Mac iPad", keywords: ["macbook", "mac mini", "imac", "ipad"] },
+  { lob: "Mac", keywords: ["mac", "macbook", "mac mini", "imac"] },
+  { lob: "iPad", keywords: ["ipad"] },
   { lob: "iPhone", keywords: ["iphone"] },
 ];

@@ -147,6 +147,9 @@ function inferLob(subject: string): Lob | null {
   const hasWatch = ["apple watch", "watch se", "watch series"].some((keyword) => matchesLobKeyword(normalized, keyword));
   const hasAirPods = matchesLobKeyword(normalized, "airpods");
   if (hasWatch && hasAirPods) return "AW & AirPods";
+  const hasMac = ["mac", "macbook", "mac mini", "imac"].some((keyword) => matchesLobKeyword(normalized, keyword));
+  const hasIpad = matchesLobKeyword(normalized, "ipad");
+  if (hasMac && hasIpad) return "Mac iPad";
   for (const rule of LOB_RULES) {
     const matchesKeyword = rule.keywords.some((keyword) => matchesLobKeyword(normalized, keyword));
     if (matchesKeyword) {

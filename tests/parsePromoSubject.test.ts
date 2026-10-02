@@ -199,6 +199,53 @@ describe("parsePromoSubject", () => {
     });
   });
 
+  it("parses the exact production MacBook-only regression as Mac", () => {
+    const input = "October promo Macbook Air 15 M5 512GB 05.10 - 25.10 - Rozetka";
+    expect(parsePromoSubject(input, now)).toMatchObject({
+      lob: "Mac",
+      partner: "Rozetka",
+      promoName: "October promo Macbook Air 15 M5 512GB",
+      startDate: "2026-10-05",
+      endDate: "2026-10-25",
+      isValid: true,
+      warnings: [],
+    });
+  });
+
+  it.each([
+    "MacBook Air Promo 01.10-20.10 Partner: Comfy",
+    "MacBook Pro 14 M5 Promo 01.10-20.10 - Comfy",
+    "Mac mini October promo 01.10-20.10 - Comfy",
+    "iMac October promo 01.10-20.10 - Comfy",
+  ])("recognizes a genuine Mac-only signal: %s", (input) => {
+    expect(parsePromoSubject(input, now).lob).toBe("Mac");
+  });
+
+  it.each([
+    "October promo iPad Air 05.10-25.10 Rozetka",
+    "iPad Pro Promo 01.10-20.10 - Comfy",
+    "iPad mini October Promo 01.10-20.10 - Comfy",
+  ])("recognizes a genuine iPad-only signal: %s", (input) => {
+    expect(parsePromoSubject(input, now).lob).toBe("iPad");
+  });
+
+  it.each([
+    "October Promo MacBook Air and iPad Air 05.10-25.10 Rozetka",
+    "MacBook Pro + iPad Pro Promo 01.10-20.10 - Comfy",
+    "Mac / iPad October Promo 01.10-20.10 - Comfy",
+    "Promo MacBook Air, iPad 11 01.10-20.10 - Comfy",
+  ])("recognizes Mac iPad only when both signals are present: %s", (input) => {
+    expect(parsePromoSubject(input, now).lob).toBe("Mac iPad");
+  });
+
+  it.each([
+    ["LOB: Mac\nPartner: Comfy\nPeriod: 01.10-20.10\niPad mentioned elsewhere", "Mac"],
+    ["LOB: iPad\nPartner: Comfy\nPeriod: 01.10-20.10\nMacBook mentioned elsewhere", "iPad"],
+    ["LOB: Mac iPad\nPartner: Comfy\nPeriod: 01.10-20.10", "Mac iPad"],
+  ])("preserves a supported explicit Mac/iPad LOB: %s", (input, lob) => {
+    expect(parsePromoSubject(input, now).lob).toBe(lob);
+  });
+
   it("rejects different duplicate ranges", () => {
     const result = parsePromoSubject(
       "MacBook Promo 10.08-06.09; iPad Promo 15.08-15.09 - Rozetka",

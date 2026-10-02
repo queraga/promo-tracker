@@ -1,4 +1,4 @@
-import type { AdminPartnerCatalogItem, ArchivedPeriod, ArchivedPeriodDetail, AssignedPartner, CurrentUser, ManagedUser, PromoDto, PromoPartnerOption, ProlongPromoResult, QuarterSelection, QuarterlySummary } from "../../types";
+import type { AdminPartnerCatalogItem, ArchivedPeriod, ArchivedPeriodDetail, AssignedPartner, CurrentUser, ManagedUser, PromoDto, PromoPartnerOption, ProlongPromoResult, QuarterSelection, QuarterlySummary, ScopedProlongationResult } from "../../types";
 export class ApiError extends Error { constructor(public status: number, message: string) { super(message); this.name = "ApiError"; } }
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> { const response = await fetch(path, { ...init, credentials: "include", headers: { "Content-Type": "application/json", ...init?.headers } }); if (!response.ok) { const body = await response.json().catch(() => ({ error: "Помилка запиту" })); throw new ApiError(response.status, body.error ?? "Помилка запиту"); } return response.json() as Promise<T>; }
 export const getCurrentUser = () => apiFetch<CurrentUser>("/api/auth/me");
@@ -10,6 +10,7 @@ export const getPromo = (id: string) => apiFetch<PromoDto>(`/api/promos/${id}`);
 export const getPromoPartnerOptions = (id: string) => apiFetch<PromoPartnerOption[]>(`/api/promos/${id}/partner-options`);
 export const addPromoPartners = (id: string, partnerIds: string[]) => apiFetch<PromoDto>(`/api/promos/${id}/partners`, { method: "POST", body: JSON.stringify({ partnerIds }) });
 export const prolongPromo = (id: string, endDate: string) => apiFetch<ProlongPromoResult>(`/api/promos/${id}/prolong`, { method: "POST", body: JSON.stringify({ endDate }) });
+export const prolongAssignedPromoPartners = (id: string, promoPartnerIds: string[], endDate: string) => apiFetch<ScopedProlongationResult>(`/api/promos/${id}/prolong-partners`, { method: "POST", body: JSON.stringify({ promoPartnerIds, endDate }) });
 export const getPendingReports = () => apiFetch<unknown[]>("/api/reports/pending");
 export const updateReportStatus = (id: string, received: boolean) => apiFetch<{ promoPartnerId: string; reportReceived: boolean; reportReceivedAt: string | null }>(`/api/promo-partners/${id}/report`, { method: "PATCH", body: JSON.stringify({ received }) });
 export const deletePromo = (id: string) => apiFetch<{ success: boolean }>(`/api/promos/${id}`, { method: "DELETE" });

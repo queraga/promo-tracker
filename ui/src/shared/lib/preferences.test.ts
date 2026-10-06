@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mobilePartnerKey, readMobilePartner, readPartnerColumns, reconcileMobilePartner, reconcilePartnerColumns, reconcilePartnerFilter, writeMobilePartner, writePartnerColumns, type PreferenceStorage } from "./preferences";
+import { dashboardPartnerPreferenceKey, readDashboardPartners, reconcileDashboardPartners, writeDashboardPartners, type PreferenceStorage } from "./preferences";
 
 class MemoryStorage implements PreferenceStorage {
   values = new Map<string, string>();
@@ -7,53 +7,51 @@ class MemoryStorage implements PreferenceStorage {
   setItem(key: string, value: string) { this.values.set(key, value); }
   removeItem(key: string) { this.values.delete(key); }
 }
+const available = [{ id: "rozetka-id", name: "Rozetka" }, { id: "comfy-id", name: "Comfy" }];
 
-describe("browser preferences", () => {
-  it("stores selected partner columns per user and filters stale names", () => {
+describe("unified dashboard partner preference", () => {
+  it("starts with all partners and stores selection per user", () => {
     const storage = new MemoryStorage();
-    writePartnerColumns(storage, 7, ["Rozetka", "Legacy"]);
-    expect(readPartnerColumns(storage, 7, ["Rozetka", "Comfy"])).toEqual(["Rozetka"]);
-    expect(readPartnerColumns(storage, 8, ["Rozetka"])).toBeNull();
+    expect(readDashboardPartners(storage, 7, available)).toBeNull();
+    writeDashboardPartners(storage, 7, ["comfy-id"]);
+    expect(readDashboardPartners(storage, 7, available)).toEqual(["comfy-id"]);
+    expect(readDashboardPartners(storage, 8, available)).toBeNull();
   });
-  it("removes the preference when all partners are selected", () => {
+  it("uses a new versioned key and never imports old partial column preferences", () => {
     const storage = new MemoryStorage();
-    writePartnerColumns(storage, 7, ["Rozetka"]);
-    writePartnerColumns(storage, 7, null);
-    expect(readPartnerColumns(storage, 7, ["Rozetka"])).toBeNull();
+    storage.setItem("promo-tracker:partner-columns:7", JSON.stringify(["Comfy"]));
+    expect(dashboardPartnerPreferenceKey(7)).toBe("promo-tracker:dashboard-partners:v1:7");
+    expect(readDashboardPartners(storage, 7, available)).toBeNull();
   });
-  it("persists a cleared zero-column selection", () => {
+  it("persists an intentionally empty selection and represents select all as null", () => {
     const storage = new MemoryStorage();
-    writePartnerColumns(storage, 7, []);
-    expect(readPartnerColumns(storage, 7, ["Rozetka", "Comfy"])).toEqual([]);
+    writeDashboardPartners(storage, 7, []);
+    expect(readDashboardPartners(storage, 7, available)).toEqual([]);
+    writeDashboardPartners(storage, 7, null);
+    expect(readDashboardPartners(storage, 7, available)).toBeNull();
   });
-  it("ignores malformed preferences", () => {
+  it("prunes stale IDs and keeps the safest empty selection if every saved partner is stale", () => {
     const storage = new MemoryStorage();
-    storage.setItem("promo-tracker:partner-columns:7", "not json");
-    expect(readPartnerColumns(storage, 7, ["Rozetka"])).toBeNull();
+    writeDashboardPartners(storage, 7, ["comfy-id", "removed-id"]);
+    expect(readDashboardPartners(storage, 7, available)).toEqual(["comfy-id"]);
+    writeDashboardPartners(storage, 7, ["removed-id"]);
+    expect(readDashboardPartners(storage, 7, available)).toEqual([]);
   });
-  it("stores only an available mobile partner", () => {
+  it("promotes an assigned-name fallback to its stable ID once associated", () => {
     const storage = new MemoryStorage();
-    writeMobilePartner(storage, 7, "Comfy");
-    expect(readMobilePartner(storage, 7, ["Rozetka", "Comfy"])).toBe("Comfy");
-    expect(readMobilePartner(storage, 7, ["Rozetka"])).toBe("");
+    writeDashboardPartners(storage, 7, ["unassociated:Rozetka"]);
+    expect(readDashboardPartners(storage, 7, available)).toEqual(["rozetka-id"]);
+    expect(storage.getItem(dashboardPartnerPreferenceKey(7))).toBe(JSON.stringify(["rozetka-id"]));
   });
-  it("removes the last deleted partner from UI state and stored columns", () => {
+  it("reconciles persisted selection after workspace scope or associations change", () => {
     const storage = new MemoryStorage();
-    writePartnerColumns(storage, 7, ["MOYO", "Rozetka"]);
-    expect(reconcilePartnerColumns(storage, 7, ["MOYO", "Rozetka"], ["Rozetka"])).toEqual(["Rozetka"]);
-    expect(readPartnerColumns(storage, 7, ["MOYO", "Rozetka"])).toEqual(["Rozetka"]);
+    writeDashboardPartners(storage, 7, ["rozetka-id", "comfy-id"]);
+    expect(reconcileDashboardPartners(storage, 7, ["rozetka-id", "comfy-id"], [available[0]!])).toEqual(["rozetka-id"]);
+    expect(readDashboardPartners(storage, 7, [available[0]!])).toEqual(["rozetka-id"]);
   });
-  it("keeps a partner when the refreshed API still reports another association", () => {
-    const storage = new MemoryStorage();
-    expect(reconcilePartnerColumns(storage, 7, ["MOYO"], ["MOYO", "Rozetka"])).toEqual(["MOYO"]);
-    expect(reconcilePartnerFilter("MOYO", ["MOYO", "Rozetka"])).toBe("MOYO");
-    expect(reconcileMobilePartner(storage, 7, "MOYO", ["MOYO", "Rozetka"])).toBe("MOYO");
-  });
-  it("resets filter and mobile selection when the last association is deleted", () => {
-    const storage = new MemoryStorage();
-    writeMobilePartner(storage, 7, "MOYO");
-    expect(reconcilePartnerFilter("MOYO", ["Rozetka"])).toBe("");
-    expect(reconcileMobilePartner(storage, 7, "MOYO", ["Rozetka"])).toBe("");
-    expect(storage.getItem(mobilePartnerKey(7))).toBeNull();
+  it("handles browser storage failures without breaking in-memory behavior", () => {
+    const broken: PreferenceStorage = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); }, removeItem: () => { throw new Error("blocked"); } };
+    expect(readDashboardPartners(broken, 7, available)).toBeNull();
+    expect(() => writeDashboardPartners(broken, 7, [])).not.toThrow();
   });
 });

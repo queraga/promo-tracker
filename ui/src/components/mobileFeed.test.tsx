@@ -1,40 +1,49 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getPartnerFeed, MobilePartnerFeed } from "./MobilePartnerFeed";
-import type { PromoDto, PromoStatus } from "../types";
+import type { PartnerOption, PromoDto, PromoStatus } from "../types";
 
-const promo = (id: string, partnerName: string, status: PromoStatus, reportReceived = false): PromoDto => ({
+const promo = (id: string, partners: Array<{ name: string; received?: boolean }>, status: PromoStatus = "finished"): PromoDto => ({
   id, lob: "iPhone", name: `Promo ${id}`, startDate: "2026-09-01", endDate: "2026-09-10", prolongedAt: null, status,
-  partners: [{ promoPartnerId: `relation-${id}`, partnerId: `partner-${partnerName}`, partnerName, reportReceived, reportReceivedAt: reportReceived ? "2026-09-11" : null, rawEmailSubject: `Promo ${id}` }],
+  partners: partners.map(({ name, received }) => ({ promoPartnerId: `relation-${id}-${name}`, partnerId: `partner-${name}`, partnerName: name, reportReceived: Boolean(received), reportReceivedAt: received ? "2026-09-11" : null, rawEmailSubject: `Promo ${id}` })),
 });
-const promos = [promo("active", "Rozetka", "active"), promo("pending", "Rozetka", "finished"), promo("received", "Rozetka", "finished", true), promo("other", "Comfy", "finished")];
+const partners: PartnerOption[] = ["Comfy", "Rozetka", "Citrus"].map((name) => ({ id: `partner-${name}`, name }));
+const promos = [
+  promo("a", [{ name: "Comfy" }, { name: "Rozetka" }]),
+  promo("b", [{ name: "Rozetka" }, { name: "Citrus" }]),
+  promo("c", [{ name: "Citrus" }]),
+  promo("d", [{ name: "Comfy" }, { name: "Citrus" }]),
+  promo("active", [{ name: "Comfy" }], "active"),
+];
 
 describe("mobile partner feed", () => {
-  it("asks for a partner before showing promos", () => {
-    const html = renderToStaticMarkup(<MobilePartnerFeed promos={promos} partners={["Rozetka", "Comfy"]} selectedPartner="" pendingOnly={false} onPartnerChange={vi.fn()} onSelect={vi.fn()} />);
-    expect(html).toContain("Оберіть партнера");
-    expect(html).not.toContain("Promo active");
-  });
-  it("shows only the selected partner with status and report state", () => {
-    const html = renderToStaticMarkup(<MobilePartnerFeed promos={promos} partners={["Rozetka", "Comfy"]} selectedPartner="Rozetka" pendingOnly={false} onPartnerChange={vi.fn()} onSelect={vi.fn()} />);
-    expect(html).toContain("Promo active");
-    expect(html).toContain("Promo pending");
-    expect(html).toContain("Очікується звіт");
-    expect(html).toContain("Звіт отримано");
-    expect(html).not.toContain("Promo other");
-  });
-  it("applies pending reports to the selected partner relation", () => {
-    expect(getPartnerFeed(promos, "Rozetka", true).map((item) => item.id)).toEqual(["pending"]);
-    expect(getPartnerFeed(promos, "Comfy", true).map((item) => item.id)).toEqual(["other"]);
-  });
-  it("renders a selector that allows changing partner without logout", () => {
-    const html = renderToStaticMarkup(<MobilePartnerFeed promos={promos} partners={["Rozetka", "Comfy"]} selectedPartner="Rozetka" pendingOnly={false} onPartnerChange={vi.fn()} onSelect={vi.fn()} />);
-    expect(html).toContain("<select");
+  it("uses OR semantics and shows each selected Promo once", () => {
+    const selected = ["partner-Comfy", "partner-Rozetka"];
+    expect(getPartnerFeed(promos, selected, false).map((item) => item.id)).toEqual(["active", "a", "b", "d"]);
+    const html = renderToStaticMarkup(<MobilePartnerFeed promos={promos} partners={partners} selectedPartners={selected} pendingOnly={false} onSelect={() => undefined} />);
+    expect((html.match(/class="promo-card"/g) ?? [])).toHaveLength(4);
     expect(html).toContain("Comfy");
+    expect(html).toContain("Rozetka");
+    expect(html).not.toContain("<strong>Citrus:");
+    expect(html).not.toContain("Promo c");
   });
-  it("clears a previously stored partner that is no longer available", () => {
-    const html = renderToStaticMarkup(<MobilePartnerFeed promos={promos} partners={["Rozetka"]} selectedPartner="Comfy" pendingOnly={false} onPartnerChange={vi.fn()} onSelect={vi.fn()} />);
-    expect(html).toContain("Оберіть партнера");
-    expect(html).not.toContain("Promo other");
+  it("shows only pending states for selected relations in pending mode", () => {
+    const records = [promo("selected-pending", [{ name: "Comfy" }]), promo("hidden-pending", [{ name: "Comfy", received: true }, { name: "Citrus" }])];
+    expect(getPartnerFeed(records, ["partner-Comfy"], true).map((item) => item.id)).toEqual(["selected-pending"]);
+  });
+  it("shows all authorized relations for all-partners selection", () => {
+    const html = renderToStaticMarkup(<MobilePartnerFeed promos={promos} partners={partners} selectedPartners={null} pendingOnly={false} onSelect={() => undefined} />);
+    expect((html.match(/class="promo-card"/g) ?? [])).toHaveLength(promos.length);
+    expect(html).toContain("<strong>Citrus:");
+  });
+  it("shows an empty state when no partners are selected", () => {
+    const html = renderToStaticMarkup(<MobilePartnerFeed promos={promos} partners={partners} selectedPartners={[]} pendingOnly={false} onSelect={() => undefined} />);
+    expect(html).toContain("Партнерів не обрано");
+    expect(html).not.toContain("class=" + '"promo-card"');
+  });
+  it("prunes stale selected partners before rendering mobile cards", () => {
+    const html = renderToStaticMarkup(<MobilePartnerFeed promos={promos} partners={[partners[0]!]} selectedPartners={["partner-Removed"]} pendingOnly={false} onSelect={() => undefined} />);
+    expect(html).toContain("Партнерів не обрано");
+    expect(html).not.toContain("Promo b");
   });
 });

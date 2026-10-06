@@ -5,6 +5,8 @@ import { createApi } from "../src/api/createApi.js";
 import { AUTH_COOKIE } from "../src/features/auth/authMiddleware.js";
 import { signAuthToken } from "../src/features/auth/authService.js";
 import { InvalidProlongationError, prolongPromo } from "../src/features/promoProlongation/prolongPromo.js";
+import { createPromoFromParsedSubject } from "../src/features/createPromo/createPromoFromParsedSubject.js";
+import { parsePromoSubject } from "../src/features/parsePromoSubject/parsePromoSubject.js";
 import { quarterForEndDate } from "../src/features/quarterlyReporting/quarter.js";
 import { closeReportingPeriod, getArchivedPeriod } from "../src/features/quarterlyReporting/quarterlyReporting.js";
 import { prisma } from "../src/shared/db/prisma.js";
@@ -69,6 +71,18 @@ describe("M11 promo prolongation", () => {
     expect(result.continuationPromo.partners).toHaveLength(2);
     for (const relation of result.continuationPromo.partners) expect(relation).toMatchObject({ rawEmailSubject: null, reportReceived: false, reportReceivedAt: null, firstReminderSentAt: null, secondReminderSentAt: null });
     expect(await prisma.promoPartner.findMany({ where: { promoId: promo.id }, orderBy: { id: "asc" } })).toEqual(oldRelations);
+  });
+
+  it("preserves partner-specific FSM identity through SUPERUSER whole-Promo prolongation", async () => {
+    await fixture();
+    const created = await createPromoFromParsedSubject(parsePromoSubject("FSM Comfy iPhone 09.09-28.09", operationTime));
+    const result = await prolongPromo(created.promo.id, "2026-10-12", operationTime);
+    expect(result?.kind).toBe("split");
+    if (!result || result.kind !== "split") throw new Error("expected split result");
+    expect(result.currentPromo.normalizedName).toBe(created.promo.normalizedName);
+    expect(result.continuationPromo.normalizedName).toBe(created.promo.normalizedName);
+    expect(result.continuationPromo.name).toContain("FSM");
+    expect(result.continuationPromo.partners.map(({ partner }) => partner.name)).toEqual(["Comfy"]);
   });
 
   it("rolls back the current Promo when continuation creation fails", async () => {

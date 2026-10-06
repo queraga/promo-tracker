@@ -25,7 +25,9 @@ function makeStore(now: () => number = () => 0) {
 function makeParsed(): ParsedPromoSubject {
   return {
     rawSubject: subject,
+    isFsm: false,
     partner: "Rozetka",
+    partnerCandidates: ["Rozetka"],
     lob: "iPhone",
     promoName: "Promo iPhone 17 Pro",
     startDate: "2026-09-07",
@@ -53,7 +55,7 @@ function records(start = "2026-09-07", end = "2026-09-13") {
 }
 
 function createResult(): CreatePromoResult {
-  return { ...records(), createdPromo: true, createdPartner: true, createdPromoPartner: true };
+  return { ...records(), createdPromo: true, createdPartner: true, createdPromoPartner: true, isFsm: false };
 }
 
 describe("Telegram bot workflows", () => {
@@ -63,6 +65,30 @@ describe("Telegram bot workflows", () => {
     expect(result.kind).toBe("preview");
     expect(result.kind === "preview" && result.text).toContain("Промо розпізнано");
     expect(persist).not.toHaveBeenCalled();
+  });
+
+  it("previews valid FSM details and its human-readable name", () => {
+    const result = handlePromoSubject("FSM Comfy iPhone 07.10-20.10", identity, makeStore(), currentDate);
+    expect(result.kind).toBe("preview");
+    if (result.kind !== "preview") return;
+    expect(result.text).toContain("FSM промо розпізнано");
+    expect(result.text).toContain("Тип: FSM");
+    expect(result.text).toContain("Partner: Comfy ✓");
+    expect(result.text).toContain("LOB: iPhone ✓");
+    expect(result.text).toContain("07.10.2026 - 20.10.2026 ✓");
+    expect(result.text).toContain("Промо:\n");
+    expect(result.text).toContain("FSM iPhone");
+  });
+
+  it.each([
+    ["FSM iPhone 07.10-20.10", "Не вдалося визначити партнера для FSM промо. Додайте одного партнера."],
+    ["FSM Comfy iPhone 07.10-20.10 Rozetka", "FSM промо має бути прив'язане до одного партнера. Вкажіть одного партнера."],
+  ])("rejects invalid FSM partner cardinality without an Add confirmation: %s", (input, guidance) => {
+    const result = handlePromoSubject(input, identity, makeStore(), currentDate);
+    expect(result.kind).toBe("invalid");
+    if (result.kind !== "invalid") return;
+    expect(result.text).toContain(guidance);
+    expect("confirmationId" in result).toBe(false);
   });
 
   it("shows warnings for invalid input without an Add confirmation", () => {
@@ -212,6 +238,19 @@ describe("Telegram bot workflows", () => {
   it("confirms successful persistence with recognized fields", () => {
     const text = formatPromoResult(createResult());
     expect(text).toContain("Промо додано"); expect(text).toContain("LOB:"); expect(text).toContain("Partner:"); expect(text).toContain("Period:");
+  });
+
+  it("confirms FSM creation for the specific partner", () => {
+    const result = formatPromoResult({
+      ...createResult(),
+      promo: { ...records().promo, name: "FSM iPhone", normalizedName: "!fsm:Comfy:fsm iphone" },
+      partner: { ...records().partner, name: "Comfy" },
+      isFsm: true,
+    });
+    expect(result).toContain("FSM промо додано");
+    expect(result).toContain("Тип: FSM");
+    expect(result).toContain("Partner: Comfy");
+    expect(result).toContain("Промо: FSM iPhone");
   });
 
   it("splits very long active-promo HTML into independently valid chunks", () => {

@@ -5,6 +5,35 @@ import { CANONICAL_PARTNERS, PARTNER_ALIASES } from "../src/features/parsePromoS
 const now = new Date("2026-09-09T10:00:00");
 
 describe("parsePromoSubject", () => {
+  it.each(["FSM", "fsm", "Fsm", "FSM promo", "Comfy FSM motivation"])("detects standalone FSM intent: %s", (input) => {
+    expect(parsePromoSubject(input, now).isFsm).toBe(true);
+  });
+
+  it.each(["FSMlike", "myFSMpromo", "myfSMinput", "F-S-M unrelated promo"])("does not infer FSM from substrings: %s", (input) => {
+    expect(parsePromoSubject(input, now).isFsm).toBe(false);
+  });
+
+  it("requires exactly one distinct canonical partner for FSM", () => {
+    const noPartner = parsePromoSubject("FSM iPhone 07.10-20.10", now);
+    expect(noPartner).toMatchObject({ isFsm: true, partner: null, partnerCandidates: [], isValid: false });
+
+    const onePartner = parsePromoSubject("FSM Comfy iPhone 07.10-20.10", now);
+    expect(onePartner).toMatchObject({ isFsm: true, partner: "Comfy", partnerCandidates: ["Comfy"], isValid: true });
+
+    const aliasesSamePartner = parsePromoSubject("FSM Comfy Комфі iPhone 07.10-20.10", now);
+    expect(aliasesSamePartner).toMatchObject({ isFsm: true, partner: "Comfy", partnerCandidates: ["Comfy"], isValid: true });
+
+    const multiple = parsePromoSubject("FSM Comfy iPhone 07.10-20.10 - Rozetka", now);
+    expect(multiple).toMatchObject({ isFsm: true, partner: null, partnerCandidates: ["Comfy", "Rozetka"], isValid: false });
+    expect(multiple.warnings).toContain("FSM promo must have exactly one recognized partner");
+  });
+
+  it("preserves the FSM marker in names, including explicit LOB input", () => {
+    expect(parsePromoSubject("FSM Comfy iPhone 07.10-20.10", now).promoName).toBe("FSM iPhone");
+    expect(parsePromoSubject("FSM Motivation for Comfy\nLOB: iPhone\nPeriod: 07.10-20.10", now).promoName).toBe("FSM iPhone");
+    expect(parsePromoSubject("FSM\nMotivation for Comfy\nLOB: iPhone\nPartner: Comfy\nPeriod: 07.10-20.10", now).promoName).toContain("FSM");
+  });
+
   it("recognizes all 29 canonical partner names", () => {
     expect(CANONICAL_PARTNERS).toHaveLength(29);
     for (const canonical of CANONICAL_PARTNERS) {
@@ -145,7 +174,9 @@ describe("parsePromoSubject", () => {
       "UPDATE! Промо по iPhone 17 Pro, 17 Pro Max, Air, 15, 16, 16e (07.09-13.09) - Rozetka";
     expect(parsePromoSubject(subject, now)).toEqual({
       rawSubject: subject,
+      isFsm: false,
       partner: "Rozetka",
+      partnerCandidates: ["Rozetka"],
       lob: "iPhone",
       promoName: "Промо по iPhone 17 Pro, 17 Pro Max, Air, 15, 16, 16e",
       startDate: "2026-09-07",

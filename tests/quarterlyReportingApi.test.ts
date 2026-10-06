@@ -6,6 +6,7 @@ import { AUTH_COOKIE } from "../src/features/auth/authMiddleware.js";
 import { signAuthToken } from "../src/features/auth/authService.js";
 import { prisma } from "../src/shared/db/prisma.js";
 import { createPromoFromParsedSubject } from "../src/features/createPromo/createPromoFromParsedSubject.js";
+import { parsePromoSubject } from "../src/features/parsePromoSubject/parsePromoSubject.js";
 import { ClosedReportingPeriodError } from "../src/features/quarterlyReporting/closedPeriods.js";
 import { getReportReminderCandidates, markFirstReminderSent } from "../src/features/reportReminders/reminderRepository.js";
 
@@ -129,7 +130,8 @@ describe("quarterly reporting API", () => {
     expect((await api().delete("/api/promos/q3-a").set(auth(admin))).status).toBe(409);
     expect((await api().delete(`/api/promos/q3-a/partners/${citrus.id}`).set(auth(admin))).status).toBe(409);
     expect((await api().get("/api/promos/q3-a/partner-options").set(auth(kam))).status).toBe(409);
-    await expect(createPromoFromParsedSubject({ rawSubject: "iPhone Promo 10.07-20.07 - Rozetka", normalizedName: "promo q3-a", promoName: "Promo q3-a", lob: "iPhone", partner: "Rozetka", startDate: "2026-07-10", endDate: "2026-07-20", warnings: [], isValid: true })).rejects.toBeInstanceOf(ClosedReportingPeriodError);
+    await expect(createPromoFromParsedSubject({ rawSubject: "iPhone Promo 10.07-20.07 - Rozetka", normalizedName: "promo q3-a", promoName: "Promo q3-a", lob: "iPhone", partner: "Rozetka", partnerCandidates: ["Rozetka"], isFsm: false, startDate: "2026-07-10", endDate: "2026-07-20", warnings: [], isValid: true })).rejects.toBeInstanceOf(ClosedReportingPeriodError);
+    await expect(createPromoFromParsedSubject(parsePromoSubject("FSM Comfy iPhone 10.07-20.07", now))).rejects.toBeInstanceOf(ClosedReportingPeriodError);
     expect(await prisma.promo.count()).toBe(4);
     expect(await prisma.promoPartner.count()).toBe(5);
   });

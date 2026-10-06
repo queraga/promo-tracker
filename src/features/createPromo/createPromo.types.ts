@@ -7,6 +7,7 @@ export type CreatePromoResult = {
   createdPromo: boolean;
   createdPartner: boolean;
   createdPromoPartner: boolean;
+  isFsm: boolean;
 };
 
 export class InvalidParsedPromoSubjectError extends Error {

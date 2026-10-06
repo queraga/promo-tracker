@@ -6,12 +6,17 @@ import {
   type CreatePromoResult,
 } from "./createPromo.types.js";
 import { assertReportingPeriodOpen } from "../quarterlyReporting/closedPeriods.js";
+import { extractPartnerCandidates, isFsmPromoSubject, stripEmailPrefixes } from "../parsePromoSubject/parsePromoSubject.utils.js";
 
 export async function createPromoFromParsedSubject(
   parsed: ParsedPromoSubject,
 ): Promise<CreatePromoResult> {
+  const rawSubjectIsFsm = isFsmPromoSubject(stripEmailPrefixes(parsed.rawSubject));
+  const rawPartnerCandidates = extractPartnerCandidates(stripEmailPrefixes(parsed.rawSubject));
   if (
     !parsed.isValid ||
+    parsed.isFsm !== rawSubjectIsFsm ||
+    (rawSubjectIsFsm && (rawPartnerCandidates.length !== 1 || parsed.partner !== rawPartnerCandidates[0])) ||
     !parsed.partner ||
     !parsed.lob ||
     !parsed.startDate ||
@@ -26,10 +31,15 @@ export async function createPromoFromParsedSubject(
 
   return prisma.$transaction(async (tx) => {
     await assertReportingPeriodOpen({ lob: parsed.lob!, endDate }, tx);
+    // Normalized standard names contain only letters, numbers, and spaces. The
+    // punctuation-prefixed FSM namespace therefore cannot collide with them.
+    const normalizedName = parsed.isFsm
+      ? `!fsm:${encodeURIComponent(parsed.partner!)}:${parsed.normalizedName}`
+      : parsed.normalizedName;
     const promoKey = {
       lob_normalizedName_startDate_endDate: {
         lob: parsed.lob!,
-        normalizedName: parsed.normalizedName,
+        normalizedName,
         startDate,
         endDate,
       },
@@ -40,7 +50,7 @@ export async function createPromoFromParsedSubject(
       create: {
         lob: parsed.lob!,
         name: parsed.promoName,
-        normalizedName: parsed.normalizedName,
+        normalizedName,
         startDate,
         endDate,
       },
@@ -75,6 +85,7 @@ export async function createPromoFromParsedSubject(
       createdPromo: existingPromo === null,
       createdPartner: existingPartner === null,
       createdPromoPartner: existingPromoPartner === null,
+      isFsm: parsed.isFsm,
     };
   });
 }

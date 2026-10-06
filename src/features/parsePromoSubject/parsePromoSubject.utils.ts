@@ -113,6 +113,14 @@ function allPartnerMatches(subject: string): PartnerMatch[] {
   return matches.sort((left, right) => left.start - right.start || right.end - right.start - (left.end - left.start));
 }
 
+export function extractPartnerCandidates(subject: string): string[] {
+  return [...new Set(allPartnerMatches(subject).map(({ canonical }) => canonical))];
+}
+
+export function isFsmPromoSubject(subject: string): boolean {
+  return /(?:^|[^\p{L}\p{N}])FSM(?=$|[^\p{L}\p{N}])/iu.test(subject);
+}
+
 function findPartnerMatch(subject: string): PartnerMatch | null {
   const matches = allPartnerMatches(subject);
   const score = (match: PartnerMatch) => {
@@ -194,6 +202,11 @@ export function buildPromoName(cleanedSubject: string, partner: string | null): 
     .trim()
     .replace(/[\s\-–,;:.]+$/u, "")
     .trim();
+}
+
+export function buildFsmPromoName(cleanedSubject: string, partner: string | null): string {
+  const name = buildPromoName(cleanedSubject, partner);
+  return isFsmPromoSubject(name) ? name : `FSM ${name}`;
 }
 
 export function normalizePromoName(promoName: string): string {

@@ -11,6 +11,8 @@ import {
   withSqliteBusyRetry,
 } from "../src/features/promoProlongation/prolongAssignedPromoPartners.js";
 import { prisma } from "../src/shared/db/prisma.js";
+import { createPromoFromParsedSubject } from "../src/features/createPromo/createPromoFromParsedSubject.js";
+import { parsePromoSubject } from "../src/features/parsePromoSubject/parsePromoSubject.js";
 
 const secret = "test-secret-that-is-at-least-32-characters";
 const now = new Date("2026-09-28T17:30:00Z");
@@ -68,6 +70,17 @@ describe("M11.3a scoped prolongation domain", () => {
     expect(moved).toMatchObject({ id: before.id, partnerId: rozetka.id, rawEmailSubject: before.rawEmailSubject, reportReceived: true, reportReceivedAt: before.reportReceivedAt, firstReminderSentAt: before.firstReminderSentAt, secondReminderSentAt: before.secondReminderSentAt });
     expect(moved.promo).toMatchObject({ endDate: date("2026-09-30"), prolongedAt: now, name: "September Promo" });
     expect(await prisma.promoPartner.count({ where: { promoId: promo.id } })).toBe(3);
+  });
+
+  it("keeps a single-partner FSM identity through KAM scoped cross-quarter prolongation", async () => {
+    const { kamA } = await fixture();
+    const created = await createPromoFromParsedSubject(parsePromoSubject("FSM Comfy iPhone 09.09-28.09", now));
+    const relation = await prisma.promoPartner.findUniqueOrThrow({ where: { promoId_partnerId: { promoId: created.promo.id, partnerId: created.partner.id } } });
+    await prolongAssignedPromoPartners(created.promo.id, [relation.id], "2026-10-12", kamA.id, now);
+    const rows = await prisma.promo.findMany({ where: { normalizedName: created.promo.normalizedName }, include: { partners: { include: { partner: true } } }, orderBy: { startDate: "asc" } });
+    expect(rows).toHaveLength(2);
+    expect(rows.map(({ normalizedName }) => normalizedName)).toEqual([created.promo.normalizedName, created.promo.normalizedName]);
+    expect(rows.map(({ partners }) => partners.map(({ partner }) => partner.name))).toEqual([["Comfy"], ["Comfy"]]);
   });
 
   it("moves several visible relations while preserving hidden source relations", async () => {

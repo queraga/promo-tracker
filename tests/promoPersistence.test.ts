@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPromoFromParsedSubject } from "../src/features/createPromo/createPromoFromParsedSubject.js";
 import { InvalidParsedPromoSubjectError } from "../src/features/createPromo/createPromo.types.js";
+import { ClosedReportingPeriodError } from "../src/features/quarterlyReporting/closedPeriods.js";
 import { parsePromoSubject } from "../src/features/parsePromoSubject/parsePromoSubject.js";
 import { getAllPromos } from "../src/features/promoQueries/getAllPromos.js";
 import { getPendingReports } from "../src/features/promoQueries/getPendingReports.js";
@@ -17,6 +18,8 @@ function parsed(subject: string) {
 }
 
 beforeEach(async () => {
+  await prisma.reportingPeriod.deleteMany();
+  await prisma.user.deleteMany();
   await prisma.promoPartner.deleteMany();
   await prisma.promo.deleteMany();
   await prisma.partner.deleteMany();
@@ -54,6 +57,55 @@ describe("promo persistence", () => {
     expect(await prisma.promo.count()).toBe(1);
     expect(await prisma.partner.count()).toBe(2);
     expect(await prisma.promoPartner.count()).toBe(2);
+  });
+
+  it("keeps repeated FSM submissions idempotent for the same canonical partner", async () => {
+    const input = "FSM Comfy iPhone 07.10-20.10";
+    const first = await createPromoFromParsedSubject(parsed(input));
+    const second = await createPromoFromParsedSubject(parsed(input));
+    expect(first.promo.name).toBe("FSM iPhone");
+    expect(first.promo.normalizedName).toBe("!fsm:Comfy:fsm iphone");
+    expect(second).toMatchObject({ createdPromo: false, createdPromoPartner: false, isFsm: true });
+    expect(await prisma.promo.count()).toBe(1);
+    expect(await prisma.promoPartner.count()).toBe(1);
+  });
+
+  it("isolates identical FSM promotions by canonical partner", async () => {
+    const comfy = await createPromoFromParsedSubject(parsed("FSM Comfy iPhone 07.10-20.10"));
+    const rozetka = await createPromoFromParsedSubject(parsed("FSM Rozetka iPhone 07.10-20.10"));
+    expect(comfy.promo.id).not.toBe(rozetka.promo.id);
+    expect(await prisma.promo.count()).toBe(2);
+    expect(await prisma.promoPartner.count()).toBe(2);
+    const rows = await prisma.promo.findMany({ include: { partners: { include: { partner: true } } } });
+    expect(rows.map(({ partners }) => partners.map(({ partner }) => partner.name)).sort((a, b) => a[0]!.localeCompare(b[0]!))).toEqual([["Comfy"], ["Rozetka"]]);
+    expect(rows.every(({ name }) => name.startsWith("FSM"))).toBe(true);
+  });
+
+  it("does not collide between FSM and standard promos with the same LOB and dates", async () => {
+    const fsm = await createPromoFromParsedSubject(parsed("FSM Comfy iPhone 07.10-20.10"));
+    const standard = await createPromoFromParsedSubject(parsed("Comfy iPhone 07.10-20.10"));
+    expect(fsm.promo.id).not.toBe(standard.promo.id);
+    expect(await prisma.promo.count()).toBe(2);
+    expect(await prisma.promoPartner.count()).toBe(2);
+  });
+
+  it("enforces the single-partner FSM invariant in the domain path", async () => {
+    const parsedInput = parsed("FSM Comfy iPhone 07.10-20.10 - Rozetka");
+    await expect(createPromoFromParsedSubject({ ...parsedInput, isValid: true, partner: "Comfy" }))
+      .rejects.toBeInstanceOf(InvalidParsedPromoSubjectError);
+    expect(await prisma.promo.count()).toBe(0);
+    expect(await prisma.partner.count()).toBe(0);
+    expect(await prisma.promoPartner.count()).toBe(0);
+  });
+
+  it("does not let FSM ingestion bypass a CLOSED end-date quarter", async () => {
+    const user = await prisma.user.create({ data: { email: "fsm-closer@test.local", passwordHash: "hash", role: "SUPERUSER" } });
+    await prisma.reportingPeriod.create({ data: { year: 2026, quarter: 3, lob: "iPhone", status: "CLOSED", closedByUserId: user.id, closedAt: now } });
+    await expect(createPromoFromParsedSubject(parsed("FSM Comfy iPhone 10.07-20.07")))
+      .rejects.toBeInstanceOf(ClosedReportingPeriodError);
+    expect(await prisma.promo.count()).toBe(0);
+    expect(await prisma.partner.count()).toBe(0);
+    expect(await prisma.promoPartner.count()).toBe(0);
   });
 
   it("reuses one neutral Promo for structured subjects received through different partners", async () => {

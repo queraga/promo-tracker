@@ -2,7 +2,9 @@ export type Lob = "iPhone" | "AW" | "AirPods" | "AW & AirPods" | "Mac" | "iPad" 
 
 export type ParsedPromoSubject = {
   rawSubject: string;
+  isFsm: boolean;
   partner: string | null;
+  partnerCandidates: string[];
   lob: Lob | null;
   promoName: string;
   startDate: string | null;

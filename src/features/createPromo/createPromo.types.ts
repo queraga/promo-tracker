@@ -1,4 +1,5 @@
 import type { Partner, Promo, PromoPartner } from "@prisma/client";
+import type { CreditPromoMetadata } from "../creditPromo/creditPromo.js";
 
 export type CreatePromoResult = {
   promo: Promo;
@@ -8,7 +9,10 @@ export type CreatePromoResult = {
   createdPartner: boolean;
   createdPromoPartner: boolean;
   isFsm: boolean;
+  credit: CreditPromoMetadata | null;
 };
+
+export type CreatePromoOperationResult = { promos: CreatePromoResult[]; allLob: boolean; credit: CreditPromoMetadata | null };
 
 export class InvalidParsedPromoSubjectError extends Error {
   constructor() {

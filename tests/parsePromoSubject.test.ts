@@ -175,6 +175,9 @@ describe("parsePromoSubject", () => {
     expect(parsePromoSubject(subject, now)).toEqual({
       rawSubject: subject,
       isFsm: false,
+      credit: null,
+      allLob: false,
+      classificationConflict: null,
       partner: "Rozetka",
       partnerCandidates: ["Rozetka"],
       lob: "iPhone",

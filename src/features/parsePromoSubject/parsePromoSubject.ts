@@ -1,5 +1,7 @@
 import type { ParsedPromoSubject } from "./parsePromoSubject.types.js";
+import { classifyCreditPromo, isAllLobRequest } from "../creditPromo/creditPromo.js";
 import {
+  buildCreditPromoName,
   buildFsmPromoName,
   buildPromoName,
   detectLob,
@@ -8,6 +10,7 @@ import {
   extractPartnerCandidates,
   isFsmPromoSubject,
   normalizePromoName,
+  normalizeCreditPromoName,
   stripEmailPrefixes,
   uniqueWarnings,
 } from "./parsePromoSubject.utils.js";
@@ -21,22 +24,30 @@ export function parsePromoSubject(
   const rawSubject = subject;
   const cleanedSubject = stripEmailPrefixes(subject);
   const isFsm = isFsmPromoSubject(cleanedSubject);
+  const creditClassification = classifyCreditPromo(cleanedSubject);
+  const credit = creditClassification?.kind === "credit" ? creditClassification.metadata : null;
+  const classificationConflict = creditClassification?.kind === "conflict"
+    ? "credit-signals"
+    : isFsm && credit ? "fsm-credit" : null;
+  const allLob = credit !== null && classificationConflict === null && isAllLobRequest(cleanedSubject);
   const partnerCandidates = extractPartnerCandidates(cleanedSubject);
   const partner = isFsm
     ? partnerCandidates.length === 1 ? partnerCandidates[0] : null
     : extractPartner(cleanedSubject);
-  const lob = detectLob(cleanedSubject);
+  const lob = allLob ? null : detectLob(cleanedSubject);
   const dateExtraction = extractDateRanges(cleanedSubject, currentDate);
   const promoName = isFsm
     ? buildFsmPromoName(cleanedSubject, partner)
-    : buildPromoName(cleanedSubject, partner);
+    : credit ? buildCreditPromoName(cleanedSubject, partner) : buildPromoName(cleanedSubject, partner);
   const warnings: string[] = [];
 
   if (!partner) warnings.push("Partner could not be detected");
   if (isFsm && partnerCandidates.length > 1) {
     warnings.push("FSM promo must have exactly one recognized partner");
   }
-  if (!lob) warnings.push("LOB could not be detected");
+  if (classificationConflict === "fsm-credit") warnings.push("FSM і кредитне промо мають несумісні типи");
+  if (classificationConflict === "credit-signals") warnings.push("Не вдалося однозначно визначити банк або кредитну механіку");
+  if (!lob && !allLob) warnings.push("LOB could not be detected");
   if (dateExtraction.warning) warnings.push(dateExtraction.warning);
   if (!promoName) warnings.push("Promo name could not be determined");
 
@@ -44,17 +55,21 @@ export function parsePromoSubject(
   return {
     rawSubject,
     isFsm,
+    credit,
+    allLob,
+    classificationConflict,
     partner,
     partnerCandidates,
     lob,
     promoName,
     startDate: dateExtraction.period?.startDate ?? null,
     endDate: dateExtraction.period?.endDate ?? null,
-    normalizedName: normalizePromoName(promoName),
+    normalizedName: credit ? normalizeCreditPromoName(promoName) : normalizePromoName(promoName),
     isValid:
       partner !== null &&
       (!isFsm || partnerCandidates.length === 1) &&
-      lob !== null &&
+      classificationConflict === null &&
+      (lob !== null || allLob) &&
       dateExtraction.period !== null &&
       promoName.length > 0,
     warnings: unique,

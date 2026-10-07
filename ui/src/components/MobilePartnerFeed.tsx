@@ -1,6 +1,6 @@
 import type { PartnerOption, PromoDto, PromoStatus } from "../types";
 import { sortPromos } from "../shared/lib/tracker";
-import { ProlongedBadge } from "./PromoProlongation";
+import { ProlongedBadge, SpecialPromoBadge } from "./PromoProlongation";
 
 const labels: Record<PromoStatus, string> = { active: "Активне", planned: "Заплановане", finished: "Завершене" };
 const formatDate = (value: string) => new Intl.DateTimeFormat("uk-UA", { day: "2-digit", month: "2-digit", timeZone: "UTC" }).format(new Date(value));
@@ -23,7 +23,7 @@ export function MobilePartnerFeed({ promos, partners, selectedPartners, pendingO
       const relations = selection === null ? promo.partners : promo.partners.filter((partner) => selection.includes(partner.partnerId));
       return <button type="button" className="promo-card" key={promo.id} onClick={() => onSelect(promo.id)}>
         <span className="promo-card-top"><strong>{promo.lob}</strong><span className={`badge ${promo.status}`}>{labels[promo.status]}</span></span>
-        <span className="promo-card-name promo-name-with-metadata">{promo.name}<ProlongedBadge prolongedAt={promo.prolongedAt} /></span>
+        <span className="promo-card-name promo-name-with-metadata">{promo.name}<SpecialPromoBadge specialPromo={promo.specialPromo} /><ProlongedBadge prolongedAt={promo.prolongedAt} /></span>
         <span className="promo-card-period">{formatDate(promo.startDate)}–{formatDate(promo.endDate)}</span>
         {relations.length ? relations.map((relation) => {
           const report = relation.reportReceived ? "✓ Звіт отримано" : promo.status === "finished" ? "⚠ Очікується звіт" : "Звіт ще не очікується";

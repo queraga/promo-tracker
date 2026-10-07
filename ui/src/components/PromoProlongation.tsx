@@ -1,4 +1,4 @@
-import type { PromoDto } from "../types";
+import type { PromoDto, SpecialPromo } from "../types";
 import { ApiError } from "../shared/api/client";
 
 const dateOnly = (value: string) => value.slice(0, 10);
@@ -45,6 +45,14 @@ export function scopedProlongationErrorMessage(reason: unknown) {
 export const isKamProlongationEligible = (promo: Pick<PromoDto, "endDate">, now: Date = new Date()) => now.toISOString().slice(0, 10) <= dateOnly(promo.endDate);
 
 export function ProlongedBadge({ prolongedAt }: { prolongedAt?: string | null }) { return prolongedAt ? <span className="prolonged-badge">Prolonged</span> : null; }
+
+export function SpecialPromoBadge({ specialPromo }: { specialPromo?: SpecialPromo | null }) {
+  if (!specialPromo) return null;
+  const label = specialPromo.kind === "FSM"
+    ? "FSM"
+    : `${specialPromo.bank === "MONO" ? "mono" : "ПриватБанк"}${specialPromo.mechanic ? ` · ${specialPromo.mechanic}` : ""}`;
+  return <span className="special-promo-badge">{label}</span>;
+}
 
 type Props = { promo: PromoDto; endDate: string; submitting: boolean; error: string; onEndDateChange: (value: string) => void; onCancel: () => void; onConfirm: () => void };
 export function ProlongationDialog({ promo, endDate, submitting, error, onEndDateChange, onCancel, onConfirm }: Props) {

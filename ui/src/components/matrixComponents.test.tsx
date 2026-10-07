@@ -44,4 +44,19 @@ describe("desktop matrix components", () => {
     expect(html).toContain("Статус");
     expect(html).not.toContain("Rozetka");
   });
+  it.each([
+    [{ kind: "FSM" }, "FSM"],
+    [{ kind: "CREDIT", bank: "MONO", mechanic: "ПЧ10" }, "mono · ПЧ10"],
+    [{ kind: "CREDIT", bank: "MONO", mechanic: null }, "mono"],
+    [{ kind: "CREDIT", bank: "PRIVATBANK", mechanic: "ОЧ25" }, "ПриватБанк · ОЧ25"],
+  ] as const)("renders special badge %s and keeps Prolonged independent", (specialPromo, label) => {
+    const html = renderToStaticMarkup(<TrackerTable promos={[{ ...promo, specialPromo, prolongedAt: "2026-09-29T10:00:00.000Z" }]} partners={[]} onSelect={vi.fn()} />);
+    expect(html).toContain(`class="special-promo-badge">${label}</span>`);
+    expect(html).toContain("class=\"prolonged-badge\">Prolonged</span>");
+    expect(html).toContain("promo-name-with-metadata");
+  });
+  it("renders no special badge for standard desktop promos", () => {
+    const html = renderToStaticMarkup(<TrackerTable promos={[promo]} partners={[]} onSelect={vi.fn()} />);
+    expect(html).not.toContain("special-promo-badge");
+  });
 });

@@ -1,6 +1,7 @@
 export type PromoStatus = "planned" | "active" | "finished";
 export type PromoPartnerDto = { promoPartnerId: string; partnerId: string; partnerName: string; reportReceived: boolean; reportReceivedAt: string | null; rawEmailSubject: string | null };
-export type PromoDto = { id: string; lob: string; name: string; startDate: string; endDate: string; prolongedAt: string | null; status: PromoStatus; partners: PromoPartnerDto[] };
+export type SpecialPromo = { kind: "FSM" } | { kind: "CREDIT"; bank: "MONO" | "PRIVATBANK"; mechanic: string | null };
+export type PromoDto = { id: string; lob: string; name: string; startDate: string; endDate: string; prolongedAt: string | null; status: PromoStatus; specialPromo?: SpecialPromo | null; partners: PromoPartnerDto[] };
 export type ProlongPromoResult = { kind: "extended"; promo: PromoDto } | { kind: "split"; currentPromo: PromoDto; continuationPromo: PromoDto };
 export type ScopedProlongationResult = { kind: "extended" | "split"; refreshRequired: true };
 export type PromoPartnerOption = { id: string; name: string; alreadyAssociated: boolean };

@@ -1,5 +1,6 @@
 import { LOB_RULES, PARTNER_ALIASES } from "./parsePromoSubject.config.js";
 import type { Lob } from "./parsePromoSubject.types.js";
+import { canonicalizeCreditMechanicName } from "../creditPromo/creditPromo.js";
 
 const DATE_RANGE_SOURCE = String.raw`(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?\s*[-–]\s*(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?`;
 
@@ -204,6 +205,14 @@ export function buildPromoName(cleanedSubject: string, partner: string | null): 
     .trim();
 }
 
+export function buildCreditPromoName(cleanedSubject: string, partner: string | null): string {
+  const meaningfulLines = cleanedSubject.split(/\r?\n/u).filter((line) =>
+    !/^\s*(?:lob|partner|партнер|період|period)\s*:/iu.test(line),
+  );
+  const source = meaningfulLines.join(" ").trim() || cleanedSubject;
+  return buildPromoName(source, partner);
+}
+
 export function buildFsmPromoName(cleanedSubject: string, partner: string | null): string {
   const name = buildPromoName(cleanedSubject, partner);
   return isFsmPromoSubject(name) ? name : `FSM ${name}`;
@@ -215,6 +224,10 @@ export function normalizePromoName(promoName: string): string {
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .replace(/\s+/gu, " ")
     .trim();
+}
+
+export function normalizeCreditPromoName(promoName: string): string {
+  return normalizePromoName(canonicalizeCreditMechanicName(promoName));
 }
 
 export function uniqueWarnings(warnings: readonly string[]): string[] {

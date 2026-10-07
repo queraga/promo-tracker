@@ -17,6 +17,17 @@ const get = (path: string, overrides: Partial<ApiDependencies> = {}) => request(
 
 describe("Promo Tracker API", () => {
   it("GET /api/promos returns derived status and partner report state", async () => { const response = await get("/api/promos"); expect(response.status).toBe(200); expect(response.body[0]).toMatchObject({ id: "promo-1", status: "active", partners: [{ partnerName: "Rozetka", reportReceived: false }] }); expect(response.body[0]).not.toHaveProperty("normalizedName"); });
+  it.each([
+    ["Apple Watch Promo", null],
+    ["FSM Apple Watch Promo", { kind: "FSM" }],
+    ["ПЧ10 mono Apple Watch Promo", { kind: "CREDIT", bank: "MONO", mechanic: "ПЧ10" }],
+    ["monomarket Apple Watch Promo", { kind: "CREDIT", bank: "MONO", mechanic: null }],
+    ["ОЧ25 Приват Apple Watch Promo", { kind: "CREDIT", bank: "PRIVATBANK", mechanic: "ОЧ25" }],
+  ])("GET /api/promos derives specialPromo metadata for %s", async (name, specialPromo) => {
+    const response = await get("/api/promos", { getAllPromos: vi.fn().mockResolvedValue([{ ...promoRecord, name }]) });
+    expect(response.body[0].specialPromo).toEqual(specialPromo);
+    expect(response.body[0]).not.toHaveProperty("normalizedName");
+  });
   it("GET /api/promos/:id returns an existing promo", async () => { const response = await get("/api/promos/promo-1"); expect(response.status).toBe(200); expect(response.body.partners[0].rawEmailSubject).toBe("AW <Promo> - Rozetka"); });
   it("GET /api/promos/:id returns 404 for an unknown promo", async () => expect((await get("/api/promos/missing", { getPromoById: vi.fn().mockResolvedValue(null) })).status).toBe(404));
   it("GET /api/reports/pending delegates to the existing service", async () => { const load = vi.fn().mockResolvedValue([pendingRecord]); const response = await get("/api/reports/pending", { getPendingReports: load }); expect(load).toHaveBeenCalledOnce(); expect(response.body[0]).toMatchObject({ promoPartnerId: "relation-1", promoName: "Apple Watch Promo" }); });

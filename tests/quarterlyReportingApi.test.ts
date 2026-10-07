@@ -130,7 +130,7 @@ describe("quarterly reporting API", () => {
     expect((await api().delete("/api/promos/q3-a").set(auth(admin))).status).toBe(409);
     expect((await api().delete(`/api/promos/q3-a/partners/${citrus.id}`).set(auth(admin))).status).toBe(409);
     expect((await api().get("/api/promos/q3-a/partner-options").set(auth(kam))).status).toBe(409);
-    await expect(createPromoFromParsedSubject({ rawSubject: "iPhone Promo 10.07-20.07 - Rozetka", normalizedName: "promo q3-a", promoName: "Promo q3-a", lob: "iPhone", partner: "Rozetka", partnerCandidates: ["Rozetka"], isFsm: false, startDate: "2026-07-10", endDate: "2026-07-20", warnings: [], isValid: true })).rejects.toBeInstanceOf(ClosedReportingPeriodError);
+    await expect(createPromoFromParsedSubject({ rawSubject: "iPhone Promo 10.07-20.07 - Rozetka", normalizedName: "promo q3-a", promoName: "Promo q3-a", lob: "iPhone", partner: "Rozetka", partnerCandidates: ["Rozetka"], isFsm: false, credit: null, allLob: false, classificationConflict: null, startDate: "2026-07-10", endDate: "2026-07-20", warnings: [], isValid: true })).rejects.toBeInstanceOf(ClosedReportingPeriodError);
     await expect(createPromoFromParsedSubject(parsePromoSubject("FSM Comfy iPhone 10.07-20.07", now))).rejects.toBeInstanceOf(ClosedReportingPeriodError);
     expect(await prisma.promo.count()).toBe(4);
     expect(await prisma.promoPartner.count()).toBe(5);

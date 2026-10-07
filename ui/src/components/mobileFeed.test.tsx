@@ -46,4 +46,19 @@ describe("mobile partner feed", () => {
     expect(html).toContain("Партнерів не обрано");
     expect(html).not.toContain("Promo b");
   });
+  it.each([
+    [{ kind: "FSM" }, "FSM"],
+    [{ kind: "CREDIT", bank: "MONO", mechanic: "ПЧ10" }, "mono · ПЧ10"],
+    [{ kind: "CREDIT", bank: "MONO", mechanic: null }, "mono"],
+    [{ kind: "CREDIT", bank: "PRIVATBANK", mechanic: "ОЧ25" }, "ПриватБанк · ОЧ25"],
+  ] as const)("renders mobile special badge %s with Prolonged", (specialPromo, label) => {
+    const html = renderToStaticMarkup(<MobilePartnerFeed promos={[{ ...promos[0]!, specialPromo, prolongedAt: "2026-09-29T10:00:00.000Z" }]} partners={partners} selectedPartners={null} pendingOnly={false} onSelect={() => undefined} />);
+    expect(html).toContain(`class="special-promo-badge">${label}</span>`);
+    expect(html).toContain("class=\"prolonged-badge\">Prolonged</span>");
+    expect(html).toContain("promo-name-with-metadata");
+  });
+  it("renders no special badge for standard mobile promos", () => {
+    const html = renderToStaticMarkup(<MobilePartnerFeed promos={promos} partners={partners} selectedPartners={null} pendingOnly={false} onSelect={() => undefined} />);
+    expect(html).not.toContain("special-promo-badge");
+  });
 });

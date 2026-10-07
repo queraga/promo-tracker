@@ -1,5 +1,5 @@
 import { Bot, InlineKeyboard } from "grammy";
-import { createPromoFromParsedSubject } from "../features/createPromo/createPromoFromParsedSubject.js";
+import { createPromoOperationFromParsedSubject } from "../features/createPromo/createPromoFromParsedSubject.js";
 import { getAllPromos } from "../features/promoQueries/getAllPromos.js";
 import { getPendingReports } from "../features/promoQueries/getPendingReports.js";
 import { getPromoPartnerById } from "../features/promoQueries/getPromoPartnerById.js";
@@ -97,7 +97,7 @@ export function createBot(token: string | undefined = process.env.TELEGRAM_BOT_T
             id,
             { chatId: ctx.chat?.id ?? 0, userId: ctx.from.id },
             pendingPromoStore,
-            createPromoFromParsedSubject,
+            createPromoOperationFromParsedSubject,
           );
           const presentation = presentPromoCallback(result);
           answer = presentation.answer;

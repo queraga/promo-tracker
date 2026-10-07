@@ -11,7 +11,7 @@ import { handlePromoCallback } from "../src/bot/workflows/promoCallbackWorkflow.
 import { handlePromoSubject } from "../src/bot/workflows/promoSubjectWorkflow.js";
 import { handleReportReceived } from "../src/bot/workflows/reportCallbackWorkflow.js";
 import { getPendingReportViews } from "../src/bot/workflows/reportsWorkflow.js";
-import type { CreatePromoResult } from "../src/features/createPromo/createPromo.types.js";
+import type { CreatePromoOperationResult } from "../src/features/createPromo/createPromo.types.js";
 import type { ParsedPromoSubject } from "../src/features/parsePromoSubject/parsePromoSubject.types.js";
 
 const identity = { chatId: 10, userId: 20 };
@@ -26,6 +26,9 @@ function makeParsed(): ParsedPromoSubject {
   return {
     rawSubject: subject,
     isFsm: false,
+    credit: null,
+    allLob: false,
+    classificationConflict: null,
     partner: "Rozetka",
     partnerCandidates: ["Rozetka"],
     lob: "iPhone",
@@ -54,8 +57,8 @@ function records(start = "2026-09-07", end = "2026-09-13") {
   return { promo, partner, promoPartner };
 }
 
-function createResult(): CreatePromoResult {
-  return { ...records(), createdPromo: true, createdPartner: true, createdPromoPartner: true, isFsm: false };
+function createResult(): CreatePromoOperationResult {
+  return { promos: [{ ...records(), createdPromo: true, createdPartner: true, createdPromoPartner: true, isFsm: false, credit: null }], allLob: false, credit: null };
 }
 
 describe("Telegram bot workflows", () => {
@@ -80,10 +83,55 @@ describe("Telegram bot workflows", () => {
     expect(result.text).toContain("FSM iPhone");
   });
 
+  it("previews Privat bank, mechanic, composite LOB, partner, and period", () => {
+    const result = handlePromoSubject("Re: ОЧ25 Приват Нова лінійка AirPods & Apple Watch 28.09-04.10 - Rozetka", identity, makeStore(), currentDate);
+    expect(result.kind).toBe("preview");
+    if (result.kind !== "preview") return;
+    expect(result.text).toContain("Bank: ПриватБанк");
+    expect(result.text).toContain("Mechanic: ОЧ25");
+    expect(result.text).toContain("LOB: AW &amp; AirPods ✓");
+    expect(result.text).toContain("Partner: Rozetka ✓");
+  });
+
+  it("previews all-LOB credit once with one confirmation id and six atomic LOBs", () => {
+    const store = makeStore();
+    const result = handlePromoSubject("ПЧ10 mono Apple all LOB 01.10-30.10 - Foxtrot", identity, store, currentDate);
+    expect(result.kind).toBe("preview");
+    if (result.kind !== "preview") return;
+    expect(result.confirmationId).toBe("confirmation-1");
+    expect(result.text).toContain("Bank: mono");
+    expect(result.text).toContain("Mechanic: ПЧ10");
+    expect(result.text).toContain("Буде створено: 6 промо");
+    expect(result.text).toContain("iPhone, Mac, iPad, AW, AirPods, ACCY");
+    expect(result.text.match(/Буде створено: 6 промо/g)).toHaveLength(1);
+  });
+
+  it("previews mono brand-only credit without a mechanic", () => {
+    const result = handlePromoSubject("monomarket iPhone 01.10-30.10 - Foxtrot", identity, makeStore(), currentDate);
+    expect(result.kind).toBe("preview");
+    if (result.kind !== "preview") return;
+    expect(result.text).toContain("Bank: mono");
+    expect(result.text).not.toContain("Mechanic:");
+  });
+
   it.each([
     ["FSM iPhone 07.10-20.10", "Не вдалося визначити партнера для FSM промо. Додайте одного партнера."],
     ["FSM Comfy iPhone 07.10-20.10 Rozetka", "FSM промо має бути прив'язане до одного партнера. Вкажіть одного партнера."],
   ])("rejects invalid FSM partner cardinality without an Add confirmation: %s", (input, guidance) => {
+    const result = handlePromoSubject(input, identity, makeStore(), currentDate);
+    expect(result.kind).toBe("invalid");
+    if (result.kind !== "invalid") return;
+    expect(result.text).toContain(guidance);
+    expect("confirmationId" in result).toBe(false);
+  });
+
+  it.each([
+    ["FSM ПЧ10 mono iPhone 01.10-30.10 - Comfy", "FSM і кредитні маркери не можна поєднувати"],
+    ["ОЧ25 ПЧ10 mono iPhone 01.10-30.10 - Comfy", "Вкажіть одну кредитну механіку та один банк"],
+    ["ПЧ10 mono iPhone 01.10-30.10", "Не вдалося визначити партнера"],
+    ["ПЧ10 mono iPhone - Foxtrot", "Не вдалося визначити період"],
+    ["ПЧ10 mono Apple 01.10-30.10 - Foxtrot", "Не вдалося визначити LOB"],
+  ])("rejects invalid credit input without a confirmation action: %s", (input, guidance) => {
     const result = handlePromoSubject(input, identity, makeStore(), currentDate);
     expect(result.kind).toBe("invalid");
     if (result.kind !== "invalid") return;
@@ -241,16 +289,23 @@ describe("Telegram bot workflows", () => {
   });
 
   it("confirms FSM creation for the specific partner", () => {
-    const result = formatPromoResult({
-      ...createResult(),
-      promo: { ...records().promo, name: "FSM iPhone", normalizedName: "!fsm:Comfy:fsm iphone" },
-      partner: { ...records().partner, name: "Comfy" },
-      isFsm: true,
-    });
+    const result = formatPromoResult({ ...createResult(), promos: [{ ...createResult().promos[0]!, promo: { ...records().promo, name: "FSM iPhone", normalizedName: "!fsm:Comfy:fsm iphone" }, partner: { ...records().partner, name: "Comfy" }, isFsm: true }] });
     expect(result).toContain("FSM промо додано");
     expect(result).toContain("Тип: FSM");
     expect(result).toContain("Partner: Comfy");
     expect(result).toContain("Промо: FSM iPhone");
+  });
+
+  it("returns one concise all-LOB success result", () => {
+    const records = createResult().promos[0]!;
+    const result = formatPromoResult({
+      credit: { bank: "MONO", mechanic: "ПЧ10" }, allLob: true,
+      promos: ["iPhone", "Mac", "iPad", "AW", "AirPods", "ACCY"].map((lob) => ({ ...records, promo: { ...records.promo, lob } })),
+    });
+    expect(result).toContain("Кредитне промо додано");
+    expect(result).toContain("mono · ПЧ10");
+    expect(result).toContain("6 LOB: iPhone, Mac, iPad, AW, AirPods, ACCY");
+    expect(result.match(/Кредитне промо додано/g)).toHaveLength(1);
   });
 
   it("splits very long active-promo HTML into independently valid chunks", () => {

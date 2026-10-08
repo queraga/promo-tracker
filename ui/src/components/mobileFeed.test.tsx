@@ -46,16 +46,25 @@ describe("mobile partner feed", () => {
     expect(html).toContain("Партнерів не обрано");
     expect(html).not.toContain("Promo b");
   });
-  it.each([
-    [{ kind: "FSM" }, "FSM"],
-    [{ kind: "CREDIT", bank: "MONO", mechanic: "ПЧ10" }, "mono · ПЧ10"],
-    [{ kind: "CREDIT", bank: "MONO", mechanic: null }, "mono"],
-    [{ kind: "CREDIT", bank: "PRIVATBANK", mechanic: "ОЧ25" }, "ПриватБанк · ОЧ25"],
-  ] as const)("renders mobile special badge %s with Prolonged", (specialPromo, label) => {
-    const html = renderToStaticMarkup(<MobilePartnerFeed promos={[{ ...promos[0]!, specialPromo, prolongedAt: "2026-09-29T10:00:00.000Z" }]} partners={partners} selectedPartners={null} pendingOnly={false} onSelect={() => undefined} />);
-    expect(html).toContain(`class="special-promo-badge">${label}</span>`);
+  it("keeps the mobile FSM badge markup unchanged with Prolonged", () => {
+    const html = renderToStaticMarkup(<MobilePartnerFeed promos={[{ ...promos[0]!, specialPromo: { kind: "FSM" }, prolongedAt: "2026-09-29T10:00:00.000Z" }]} partners={partners} selectedPartners={null} pendingOnly={false} onSelect={() => undefined} />);
+    expect(html).toContain('class="special-promo-badge">FSM</span>');
     expect(html).toContain("class=\"prolonged-badge\">Prolonged</span>");
     expect(html).toContain("promo-name-with-metadata");
+  });
+  it.each([
+    [{ kind: "CREDIT", bank: "MONO", mechanic: "ПЧ10" }, "mono-credit-badge", "data:image/svg+xml", "Кредитне промо mono", "ПЧ10"],
+    [{ kind: "CREDIT", bank: "PRIVATBANK", mechanic: "ОЧ25" }, "privatbank-credit-badge", "/src/assets/privatbank-logo.png", "Кредитне промо ПриватБанк", "ОЧ25"],
+  ] as const)("renders a mobile %s logo badge without its mechanic", (specialPromo, badgeClass, assetRef, label, mechanic) => {
+    const html = renderToStaticMarkup(<MobilePartnerFeed promos={[{ ...promos[0]!, name: `Promo ${mechanic}`, specialPromo, prolongedAt: "2026-09-29T10:00:00.000Z" }]} partners={partners} selectedPartners={null} pendingOnly={false} onSelect={() => undefined} />);
+    const badge = html.match(/<span class="special-promo-badge credit-promo-badge [^"]+"[^>]*>.*?<\/span>/)?.[0] ?? "";
+    expect(badge).toContain(badgeClass);
+    expect(badge).toContain(`src="${assetRef}`);
+    expect(badge).toContain(`aria-label="${label}"`);
+    expect(badge).toContain('alt="" aria-hidden="true"');
+    expect(badge).not.toContain(mechanic);
+    expect(html).toContain(`Promo ${mechanic}`);
+    expect(html).toContain('class="prolonged-badge">Prolonged</span>');
   });
   it("renders no special badge for standard mobile promos", () => {
     const html = renderToStaticMarkup(<MobilePartnerFeed promos={promos} partners={partners} selectedPartners={null} pendingOnly={false} onSelect={() => undefined} />);

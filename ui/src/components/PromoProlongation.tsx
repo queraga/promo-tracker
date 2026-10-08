@@ -1,5 +1,7 @@
 import type { PromoDto, SpecialPromo } from "../types";
 import { ApiError } from "../shared/api/client";
+import monoLogoUrl from "../assets/monobank-clean.svg";
+import privatBankLogoUrl from "../assets/privatbank-logo.png";
 
 const dateOnly = (value: string) => value.slice(0, 10);
 const parseDate = (value: string) => new Date(`${dateOnly(value)}T00:00:00.000Z`);
@@ -48,10 +50,16 @@ export function ProlongedBadge({ prolongedAt }: { prolongedAt?: string | null })
 
 export function SpecialPromoBadge({ specialPromo }: { specialPromo?: SpecialPromo | null }) {
   if (!specialPromo) return null;
-  const label = specialPromo.kind === "FSM"
-    ? "FSM"
-    : `${specialPromo.bank === "MONO" ? "mono" : "ПриватБанк"}${specialPromo.mechanic ? ` · ${specialPromo.mechanic}` : ""}`;
-  return <span className="special-promo-badge">{label}</span>;
+  if (specialPromo.kind === "FSM") return <span className="special-promo-badge">FSM</span>;
+
+  const isMono = specialPromo.bank === "MONO";
+  return <span
+    className={`special-promo-badge credit-promo-badge ${isMono ? "mono-credit-badge" : "privatbank-credit-badge"}`}
+    role="img"
+    aria-label={isMono ? "Кредитне промо mono" : "Кредитне промо ПриватБанк"}
+  >
+    <img src={isMono ? monoLogoUrl : privatBankLogoUrl} alt="" aria-hidden="true" />
+  </span>;
 }
 
 type Props = { promo: PromoDto; endDate: string; submitting: boolean; error: string; onEndDateChange: (value: string) => void; onCancel: () => void; onConfirm: () => void };

@@ -44,16 +44,25 @@ describe("desktop matrix components", () => {
     expect(html).toContain("Статус");
     expect(html).not.toContain("Rozetka");
   });
-  it.each([
-    [{ kind: "FSM" }, "FSM"],
-    [{ kind: "CREDIT", bank: "MONO", mechanic: "ПЧ10" }, "mono · ПЧ10"],
-    [{ kind: "CREDIT", bank: "MONO", mechanic: null }, "mono"],
-    [{ kind: "CREDIT", bank: "PRIVATBANK", mechanic: "ОЧ25" }, "ПриватБанк · ОЧ25"],
-  ] as const)("renders special badge %s and keeps Prolonged independent", (specialPromo, label) => {
-    const html = renderToStaticMarkup(<TrackerTable promos={[{ ...promo, specialPromo, prolongedAt: "2026-09-29T10:00:00.000Z" }]} partners={[]} onSelect={vi.fn()} />);
-    expect(html).toContain(`class="special-promo-badge">${label}</span>`);
+  it("keeps the FSM badge markup unchanged and independent from Prolonged", () => {
+    const html = renderToStaticMarkup(<TrackerTable promos={[{ ...promo, specialPromo: { kind: "FSM" }, prolongedAt: "2026-09-29T10:00:00.000Z" }]} partners={[]} onSelect={vi.fn()} />);
+    expect(html).toContain('class="special-promo-badge">FSM</span>');
     expect(html).toContain("class=\"prolonged-badge\">Prolonged</span>");
     expect(html).toContain("promo-name-with-metadata");
+  });
+  it.each([
+    [{ kind: "CREDIT", bank: "MONO", mechanic: "ПЧ10" }, "mono-credit-badge", "data:image/svg+xml", "Кредитне промо mono", "ПЧ10"],
+    [{ kind: "CREDIT", bank: "PRIVATBANK", mechanic: "ОЧ25" }, "privatbank-credit-badge", "/src/assets/privatbank-logo.png", "Кредитне промо ПриватБанк", "ОЧ25"],
+  ] as const)("renders an accessible %s logo badge without its mechanic", (specialPromo, badgeClass, assetRef, label, mechanic) => {
+    const html = renderToStaticMarkup(<TrackerTable promos={[{ ...promo, name: `Promo ${mechanic}`, specialPromo, prolongedAt: "2026-09-29T10:00:00.000Z" }]} partners={[]} onSelect={vi.fn()} />);
+    const badge = html.match(/<span class="special-promo-badge credit-promo-badge [^"]+"[^>]*>.*?<\/span>/)?.[0] ?? "";
+    expect(badge).toContain(badgeClass);
+    expect(badge).toContain(`src="${assetRef}`);
+    expect(badge).toContain(`aria-label="${label}"`);
+    expect(badge).toContain('alt="" aria-hidden="true"');
+    expect(badge).not.toContain(mechanic);
+    expect(html).toContain(`Promo ${mechanic}`);
+    expect(html).toContain('class="prolonged-badge">Prolonged</span>');
   });
   it("renders no special badge for standard desktop promos", () => {
     const html = renderToStaticMarkup(<TrackerTable promos={[promo]} partners={[]} onSelect={vi.fn()} />);

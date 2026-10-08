@@ -93,6 +93,31 @@ describe("Telegram bot workflows", () => {
     expect(result.text).toContain("Partner: Rozetka ✓");
   });
 
+  it("previews a multi-partner credit promo once with one confirmation", () => {
+    const store = makeStore();
+    const result = handlePromoSubject(
+      "ОЧ15 Приват iPhone initiative\n- ОЧ15 ПриватБанк\n- Partners: Rozetka, Kibernetiki, iSpace\n- 01.10-31.12",
+      identity, store, currentDate,
+    );
+    expect(result.kind).toBe("preview");
+    if (result.kind !== "preview") return;
+    expect(result.confirmationId).toBe("confirmation-1");
+    expect(result.text).toContain("Кредитне промо розпізнано");
+    expect(result.text).toContain("Partners: Rozetka, Kibernetiki, iSpace ✓");
+    expect(result.text).toContain("Промо:\nОЧ15 Приват iPhone initiative");
+  });
+
+  it("does not offer Add for an incomplete credit partner list", () => {
+    const result = handlePromoSubject(
+      "ОЧ15 Приват iPhone initiative\n- ОЧ15 ПриватБанк\n- Rozetka Kibernetiki UnknownPartner\n- 01.10-31.12",
+      identity, makeStore(), currentDate,
+    );
+    expect(result.kind).toBe("invalid");
+    if (result.kind !== "invalid") return;
+    expect(result.text).toContain("Partners: Rozetka, Kibernetiki");
+    expect("confirmationId" in result).toBe(false);
+  });
+
   it("previews all-LOB credit once with one confirmation id and six atomic LOBs", () => {
     const store = makeStore();
     const result = handlePromoSubject("ПЧ10 mono Apple all LOB 01.10-30.10 - Foxtrot", identity, store, currentDate);
@@ -306,6 +331,24 @@ describe("Telegram bot workflows", () => {
     expect(result).toContain("mono · ПЧ10");
     expect(result).toContain("6 LOB: iPhone, Mac, iPad, AW, AirPods, ACCY");
     expect(result.match(/Кредитне промо додано/g)).toHaveLength(1);
+  });
+
+  it("shows unique partners and unique LOBs for a multi-partner all-LOB result", () => {
+    const base = createResult().promos[0]!;
+    const partners = ["Rozetka", "Kibernetiki", "iSpace"];
+    const lobs = ["iPhone", "Mac", "iPad", "AW", "AirPods", "ACCY"];
+    const result = formatPromoResult({
+      credit: { bank: "PRIVATBANK", mechanic: "ОЧ15" }, allLob: true,
+      promos: lobs.flatMap((lob) => partners.map((name) => ({
+        ...base,
+        promo: { ...base.promo, lob },
+        partner: { ...base.partner, name },
+        createdPromoPartner: true,
+      }))),
+    });
+    expect(result).toContain("Partners: Rozetka, Kibernetiki, iSpace");
+    expect(result).toContain("6 LOB: iPhone, Mac, iPad, AW, AirPods, ACCY");
+    expect(result.match(/iPhone/g)).toHaveLength(1);
   });
 
   it("splits very long active-promo HTML into independently valid chunks", () => {

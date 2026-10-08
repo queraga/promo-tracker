@@ -9,6 +9,10 @@ export type ParsedPromoSubject = {
   allLob: boolean;
   classificationConflict: "fsm-credit" | "credit-signals" | null;
   partner: string | null;
+  /** Selected canonical partners for validated multi-partner CREDIT input. */
+  selectedPartners?: string[];
+  /** A structurally designated but invalid CREDIT partner list. */
+  partnerListError?: "incomplete" | "ambiguous" | "too-few";
   partnerCandidates: string[];
   lob: Lob | null;
   promoName: string;

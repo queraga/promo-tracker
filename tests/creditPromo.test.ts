@@ -6,6 +6,8 @@ import { ClosedReportingPeriodError } from "../src/features/quarterlyReporting/c
 import { classifyCreditPromo, deriveSpecialPromoMetadata, type SpecialPromoMetadata } from "../src/features/creditPromo/creditPromo.js";
 import { parsePromoSubject } from "../src/features/parsePromoSubject/parsePromoSubject.js";
 import { prisma } from "../src/shared/db/prisma.js";
+import { PendingPromoStore } from "../src/bot/state/pendingPromoStore.js";
+import { handlePromoCallback } from "../src/bot/workflows/promoCallbackWorkflow.js";
 
 const now = new Date("2026-09-09T10:00:00.000Z");
 const parse = (input: string) => parsePromoSubject(input, now);
@@ -80,6 +82,54 @@ describe("M13 credit classification and parsing", () => {
     expect(parse("ОЧ25 Приват AirPods & Apple Watch 01.10-30.10 - Foxtrot").lob).toBe("AW & AirPods");
     expect(parse("ПЧ10 mono Mac + iPad 01.10-30.10 - Foxtrot").lob).toBe("Mac iPad");
     expect(parse("ПЧ10 mono Accessories 01.10-30.10 - Foxtrot").lob).toBe("ACCY");
+  });
+
+  it.each([
+    ["ПЧ15 mono iPhone launch\n- ПЧ15 mono\n- Partners: Rozetka, Kibernetiki\n- 01.10-31.12", ["Rozetka", "Kibernetiki"]],
+    ["ОЧ15 Приват iPhone launch\n- ОЧ15 ПриватБанк\n- Partners: Rozetka; Kibernetiki; iSpace\n- 01.10-31.12", ["Rozetka", "Kibernetiki", "iSpace"]],
+    ["ОЧ15 Приват iPhone launch\n- ОЧ15 ПриватБанк\n- rozetka KIBERNETIKI i SPACE\n- 01.10-31.12", ["Rozetka", "Kibernetiki", "iSpace"]],
+    ["ПЧ10 mono iPhone launch\n- ПЧ10 mono\n- Rozetka Rozetka iSpace\n- 01.10-31.12", ["Rozetka", "iSpace"]],
+  ])("parses complete multi-partner CREDIT lists", (subject, partners) => {
+    const parsed = parse(subject);
+    expect(parsed).toMatchObject({ credit: expect.any(Object), selectedPartners: partners, partner: partners[0], isValid: true, warnings: [] });
+    expect(parsed.promoName).not.toMatch(/Partners:|Kibernetiki|Rozetka|iSpace/u);
+  });
+
+  it("keeps campaign partner-like words while removing only a designated list line", () => {
+    const parsed = parse("ПЧ10 mono Rozetka campaign iPhone\n- ПЧ10 mono\n- Partners: Rozetka, iSpace\n- 01.10-31.12");
+    expect(parsed.promoName).toContain("Rozetka campaign");
+    expect(parsed.promoName).not.toContain("Partners:");
+  });
+
+  it("resolves multi-word partner aliases as exact list entries", () => {
+    const parsed = parse("ОЧ15 Приват iPhone initiative\n- ОЧ15 ПриватБанк\n- Partners: Sota Alliance; DC Link\n- 01.10-31.12");
+    expect(parsed).toMatchObject({ selectedPartners: ["Sota Alliance", "DC Link"], isValid: true });
+  });
+
+  it.each([
+    "ОЧ15 Приват iPhone launch\n- ОЧ15 ПриватБанк\n- Partners: Rozetka, UnknownPartner, iSpace\n- 01.10-31.12",
+    "ОЧ15 Приват iPhone launch\n- ОЧ15 ПриватБанк\n- Rozetka Kibernetiki UnknownPartner\n- 01.10-31.12",
+    "ОЧ15 Приват iPhone launch\n- ОЧ15 ПриватБанк\n- Rozetka Rozetka\n- 01.10-31.12",
+  ])("rejects incomplete or too-short designated partner lists without partial persistence: %s", (subject) => {
+    const parsed = parse(subject);
+    expect(parsed.isValid).toBe(false);
+    expect(parsed.partnerListError).toBeTruthy();
+  });
+
+  it("does not interpret partner-like words in a campaign title as a list", () => {
+    const parsed = parse("ОЧ15 Приват Rozetka iSpace campaign iPhone 01.10-31.12 - Foxtrot");
+    expect(parsed.selectedPartners).toBeUndefined();
+    expect(parsed.partner).toBe("Foxtrot");
+    expect(parsed.isValid).toBe(true);
+  });
+
+  it("preserves the legacy single-partner CREDIT path", () => {
+    expect(parse("ПЧ10 mono iPhone launch 01.10-31.12 - Foxtrot")).toMatchObject({
+      partner: "Foxtrot", promoName: "ПЧ10 mono iPhone launch", isValid: true,
+    });
+    expect(parse("ОЧ15 Приват iPhone launch\n- ОЧ15 ПриватБанк\n- Rozetka\n- 01.10-31.12")).toMatchObject({
+      partner: "Rozetka", isValid: true,
+    });
   });
 
   it("canonicalizes equivalent Latin and Cyrillic mechanic spellings in normalizedName", () => {
@@ -183,6 +233,95 @@ describe("M13 credit batch persistence", () => {
     expect(await prisma.promo.count()).toBe(6);
     expect(await prisma.promoPartner.count()).toBe(6);
     expect(await prisma.promo.count({ where: { lob: { in: ["Mac iPad", "AW & AirPods"] } } })).toBe(0);
+  });
+
+  it("creates one shared Promo and three partner relations for a single-LOB list", async () => {
+    const parsed = parse("ОЧ15 Приват iPhone initiative\n- ОЧ15 ПриватБанк\n- Partners: Rozetka, Kibernetiki, iSpace\n- 01.10-31.12");
+    const result = await createPromoOperationFromParsedSubject(parsed);
+    expect(result.promos).toHaveLength(3);
+    expect(new Set(result.promos.map(({ promo }) => promo.id)).size).toBe(1);
+    expect(result.promos.map(({ partner }) => partner.name)).toEqual(["Rozetka", "Kibernetiki", "iSpace"]);
+    expect(await prisma.promo.count()).toBe(1);
+    expect(await prisma.promoPartner.count()).toBe(3);
+    expect(new Set(result.promos.map(({ promo }) => promo.normalizedName)).size).toBe(1);
+  });
+
+  it("creates six shared LOB promos and exactly eighteen relations for three partners", async () => {
+    const parsed = parse("ПЧ10 mono Apple all LOB\n- ПЧ10 mono\n- Partners: Rozetka, Kibernetiki, iSpace\n- 01.10-31.10");
+    const result = await createPromoOperationFromParsedSubject(parsed);
+    expect(result.promos).toHaveLength(18);
+    expect(new Set(result.promos.map(({ promo }) => promo.id)).size).toBe(6);
+    expect(new Set(result.promos.map(({ partner }) => partner.name))).toEqual(new Set(["Rozetka", "Kibernetiki", "iSpace"]));
+    expect(await prisma.promo.count()).toBe(6);
+    expect(await prisma.promoPartner.count()).toBe(18);
+    expect(new Set(result.promos.map(({ promo }) => promo.lob))).toEqual(new Set(["iPhone", "Mac", "iPad", "AW", "AirPods", "ACCY"]));
+    expect(new Set(result.promos.map(({ promo }) => promo.normalizedName)).size).toBe(1);
+  });
+
+  it("rolls back a multi-partner batch when a later relation write fails", async () => {
+    const parsed = parse("ПЧ10 mono iPhone initiative\n- ПЧ10 mono\n- Partners: Rozetka, Kibernetiki, iSpace\n- 01.10-31.12");
+    const failSecondRelation = async <T>(work: (tx: Prisma.TransactionClient) => Promise<T>) => prisma.$transaction(async (tx) => {
+      let writes = 0;
+      const transaction = new Proxy(tx, {
+        get(target, property, receiver) {
+          if (property !== "promoPartner") return Reflect.get(target, property, receiver);
+          const delegate = Reflect.get(target, property, receiver) as object;
+          return new Proxy(delegate, {
+            get(inner, method, innerReceiver) {
+              if (method !== "upsert") return Reflect.get(inner, method, innerReceiver);
+              return async (...args: Parameters<typeof tx.promoPartner.upsert>) => {
+                writes += 1;
+                if (writes === 2) throw new Error("forced multi-partner relation failure");
+                const upsert = Reflect.get(inner, method, innerReceiver) as (...values: Parameters<typeof tx.promoPartner.upsert>) => ReturnType<typeof tx.promoPartner.upsert>;
+                return upsert.apply(inner, args);
+              };
+            },
+          });
+        },
+      }) as Prisma.TransactionClient;
+      return work(transaction);
+    });
+    await expect(createPromoOperationFromParsedSubject(parsed, failSecondRelation)).rejects.toThrow("forced multi-partner relation failure");
+    expect(await prisma.promo.count()).toBe(0);
+    expect(await prisma.partner.count()).toBe(0);
+    expect(await prisma.promoPartner.count()).toBe(0);
+  });
+
+  it("is idempotent for repeated multi-partner submissions and permits adding one later", async () => {
+    const multi = parse("ОЧ15 Приват iPhone initiative\n- ОЧ15 ПриватБанк\n- Partners: Rozetka, Kibernetiki\n- 01.10-31.12");
+    const first = await createPromoOperationFromParsedSubject(multi);
+    const repeat = await createPromoOperationFromParsedSubject(multi);
+    const laterPartner = await createPromoOperationFromParsedSubject(parse("ОЧ15 Приват iPhone initiative\n- ОЧ15 ПриватБанк\n- Partners: iSpace\n- 01.10-31.12"));
+    expect(first.promos.every(({ createdPromoPartner }) => createdPromoPartner)).toBe(true);
+    expect(repeat.promos.every(({ createdPromoPartner }) => !createdPromoPartner)).toBe(true);
+    expect(laterPartner.promos[0]?.createdPromo).toBe(false);
+    expect(laterPartner.promos[0]?.createdPromoPartner).toBe(true);
+    expect(await prisma.promo.count()).toBe(1);
+    expect(await prisma.promoPartner.count()).toBe(3);
+  });
+
+  it("keeps same-name credit promos isolated by partner while sharing the campaign identity", async () => {
+    const rozetka = await createPromoOperationFromParsedSubject(parse("ПЧ10 mono iPhone initiative 01.10-31.10 - Rozetka"));
+    const comfy = await createPromoOperationFromParsedSubject(parse("ПЧ10 mono iPhone initiative 01.10-31.10 - Comfy"));
+    expect(comfy.promos[0]?.createdPromo).toBe(false);
+    expect(comfy.promos[0]?.createdPromoPartner).toBe(true);
+    expect(comfy.promos[0]?.promo.id).toBe(rozetka.promos[0]?.promo.id);
+    expect(await prisma.promo.count()).toBe(1);
+    expect(await prisma.promoPartner.count()).toBe(2);
+  });
+
+  it("keeps concurrent Telegram Add callbacks for a multi-partner credit promo idempotent", async () => {
+    const parsed = parse("ПЧ10 mono iPhone initiative\n- ПЧ10 mono\n- Partners: Rozetka, Kibernetiki, iSpace\n- 01.10-31.12");
+    const store = new PendingPromoStore(60_000, () => 0, () => "multi-confirmation");
+    const id = store.createPendingPromo(parsed, { chatId: 1, userId: 2 });
+    const persist = (value: typeof parsed) => createPromoOperationFromParsedSubject(value);
+    const results = await Promise.all([
+      handlePromoCallback("add", id, { chatId: 1, userId: 2 }, store, persist),
+      handlePromoCallback("add", id, { chatId: 1, userId: 2 }, store, persist),
+    ]);
+    expect(results).toHaveLength(2);
+    expect(await prisma.promo.count()).toBe(1);
+    expect(await prisma.promoPartner.count()).toBe(3);
   });
 });
 

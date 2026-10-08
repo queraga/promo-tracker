@@ -19,12 +19,32 @@ export function formatPromoResult(operation: CreatePromoOperationResult): string
   if (operation.credit) {
     const bank = operation.credit.bank === "MONO" ? "mono" : "ПриватБанк";
     const mechanic = operation.credit.mechanic ? ` · ${escapeHtml(operation.credit.mechanic)}` : "";
+    const partnerNames = [...new Set(operation.promos.map(({ partner }) => partner.name))];
+    const multiPartner = partnerNames.length > 1;
     if (operation.allLob) {
       const allRelationsAlreadyExisted = operation.promos.every(({ createdPromoPartner }) => !createdPromoPartner);
+      if (multiPartner) {
+        const lobs = [...new Set(operation.promos.map(({ promo }) => promo.lob))];
+        return [
+          `✅ <b>${allRelationsAlreadyExisted ? "Кредитне промо вже існує" : "Кредитне промо додано"}</b>`, "",
+          `${bank}${mechanic}`, `Partners: ${partnerNames.map(escapeHtml).join(", ")}`,
+          `6 LOB: ${lobs.map(escapeHtml).join(", ")}`,
+        ].join("\n");
+      }
       return [
         `✅ <b>${allRelationsAlreadyExisted ? "Кредитне промо вже існує" : "Кредитне промо додано"}</b>`, "",
         `${bank}${mechanic}`, escapeHtml(result.partner.name),
         `6 LOB: ${operation.promos.map(({ promo }) => escapeHtml(promo.lob)).join(", ")}`,
+      ].join("\n");
+    }
+    if (multiPartner) {
+      const allRelationsAlreadyExisted = operation.promos.every(({ createdPromoPartner }) => !createdPromoPartner);
+      return [
+        `✅ <b>${allRelationsAlreadyExisted ? "Кредитне промо вже існує" : "Кредитне промо додано"}</b>`, "",
+        `${bank}${mechanic}`, `LOB: ${escapeHtml(result.promo.lob)}`,
+        `Partners: ${partnerNames.map(escapeHtml).join(", ")}`,
+        `Period: ${formatCompactPeriod(result.promo.startDate, result.promo.endDate)}`,
+        `Промо: ${escapeHtml(result.promo.name)}`,
       ].join("\n");
     }
     if (!result.createdPromoPartner) return `ℹ️ <b>Кредитне промо вже існує</b>\n\n${bank}${mechanic}\nPartner: ${escapeHtml(result.partner.name)}\nПромо: ${escapeHtml(result.promo.name)}`;

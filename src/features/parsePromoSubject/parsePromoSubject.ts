@@ -8,6 +8,7 @@ import {
   extractDateRanges,
   extractPartner,
   extractPartnerCandidates,
+  extractCreditPartnerList,
   isFsmPromoSubject,
   normalizePromoName,
   normalizeCreditPromoName,
@@ -31,17 +32,26 @@ export function parsePromoSubject(
     : isFsm && credit ? "fsm-credit" : null;
   const allLob = credit !== null && classificationConflict === null && isAllLobRequest(cleanedSubject);
   const partnerCandidates = extractPartnerCandidates(cleanedSubject);
-  const partner = isFsm
+  const creditPartnerList = credit && !isFsm && classificationConflict === null
+    ? extractCreditPartnerList(cleanedSubject)
+    : null;
+  const selectedPartners = creditPartnerList?.error === null && (creditPartnerList.partners.length > 1 || creditPartnerList.explicit)
+    ? creditPartnerList.partners
+    : undefined;
+  const partner = selectedPartners?.[0] ?? (isFsm
     ? partnerCandidates.length === 1 ? partnerCandidates[0] : null
-    : extractPartner(cleanedSubject);
+    : extractPartner(cleanedSubject));
   const lob = allLob ? null : detectLob(cleanedSubject);
   const dateExtraction = extractDateRanges(cleanedSubject, currentDate);
   const promoName = isFsm
     ? buildFsmPromoName(cleanedSubject, partner)
-    : credit ? buildCreditPromoName(cleanedSubject, partner) : buildPromoName(cleanedSubject, partner);
+    : credit ? buildCreditPromoName(cleanedSubject, partner, creditPartnerList?.line) : buildPromoName(cleanedSubject, partner);
   const warnings: string[] = [];
 
   if (!partner) warnings.push("Partner could not be detected");
+  if (creditPartnerList?.error) {
+    warnings.push("Credit partner list is incomplete or ambiguous. Use Partners: Rozetka, Kibernetiki for the complete list.");
+  }
   if (isFsm && partnerCandidates.length > 1) {
     warnings.push("FSM promo must have exactly one recognized partner");
   }
@@ -59,6 +69,8 @@ export function parsePromoSubject(
     allLob,
     classificationConflict,
     partner,
+    ...(selectedPartners && selectedPartners.length > 1 ? { selectedPartners } : {}),
+    ...(creditPartnerList?.error ? { partnerListError: creditPartnerList.error } : {}),
     partnerCandidates,
     lob,
     promoName,
@@ -67,6 +79,7 @@ export function parsePromoSubject(
     normalizedName: credit ? normalizeCreditPromoName(promoName) : normalizePromoName(promoName),
     isValid:
       partner !== null &&
+      creditPartnerList?.error == null &&
       (!isFsm || partnerCandidates.length === 1) &&
       classificationConflict === null &&
       (lob !== null || allLob) &&

@@ -1,6 +1,6 @@
 import { LOB_RULES, PARTNER_ALIASES } from "./parsePromoSubject.config.js";
 import type { Lob } from "./parsePromoSubject.types.js";
-import { canonicalizeCreditMechanicName } from "../creditPromo/creditPromo.js";
+import { canonicalizeCreditMechanicName, classifyCreditPromo } from "../creditPromo/creditPromo.js";
 
 const DATE_RANGE_SOURCE = String.raw`(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?\s*[-–]\s*(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?`;
 
@@ -146,6 +146,97 @@ export function extractPartner(subject: string): string | null {
   return findPartnerMatch(subject)?.canonical ?? null;
 }
 
+export type CreditPartnerList = {
+  partners: string[];
+  line: number;
+  error: "incomplete" | "ambiguous" | "too-few" | null;
+  explicit: boolean;
+} | null;
+
+function resolvePartnerEntry(entry: string): string | null {
+  const normalized = normalizePartnerAlias(entry);
+  if (!normalized) return null;
+  const matches = Object.entries(PARTNER_ALIASES)
+    .filter(([, aliases]) => aliases.some((alias) => normalizePartnerAlias(alias) === normalized))
+    .map(([canonical]) => canonical);
+  return matches.length === 1 ? matches[0]! : null;
+}
+
+function segmentPartnerText(value: string): { sequence: string[]; ambiguous: boolean } | null {
+  const tokens = normalizePartnerAlias(value).split(" ").filter(Boolean);
+  if (tokens.length === 0) return null;
+  const aliases = Object.entries(PARTNER_ALIASES).flatMap(([canonical, values]) =>
+    [...new Set(values.map(normalizePartnerAlias))].map((alias) => ({ canonical, tokens: alias.split(" ") })),
+  );
+  const memo = new Map<number, string[][]>();
+  const segment = (offset: number): string[][] => {
+    if (offset === tokens.length) return [[]];
+    const cached = memo.get(offset);
+    if (cached) return cached;
+    const paths: string[][] = [];
+    for (const alias of aliases) {
+      if (!alias.tokens.every((token, index) => tokens[offset + index] === token)) continue;
+      for (const tail of segment(offset + alias.tokens.length)) {
+        paths.push([alias.canonical, ...tail]);
+        if (paths.length > 32) break;
+      }
+      if (paths.length > 32) break;
+    }
+    memo.set(offset, paths);
+    return paths;
+  };
+  const paths = segment(0);
+  if (paths.length === 0) return null;
+  const uniquePaths = [...new Map(paths.map((path) => [path.join("\u0000"), path])).values()];
+  return { sequence: uniquePaths[0]!, ambiguous: uniquePaths.length > 1 };
+}
+
+/**
+ * Reads partner lists only from explicit Partners fields or a dedicated
+ * bullet line between a credit-classified line and a date-only line.
+ */
+export function extractCreditPartnerList(subject: string): CreditPartnerList {
+  const lines = subject.split(/\r?\n/u);
+  const explicitIndexes = lines.flatMap((line, index) => /^\s*(?:[-–]\s*)?partners\s*:/iu.test(line) ? [index] : []);
+  const explicitIndex = explicitIndexes[0] ?? -1;
+  if (explicitIndex >= 0) {
+    if (explicitIndexes.length > 1) return { partners: [], line: explicitIndex, error: "ambiguous", explicit: true };
+    const value = lines[explicitIndex]!.replace(/^\s*(?:[-–]\s*)?partners\s*:\s*/iu, "");
+    const entries = value.split(/[,;]/u).map((entry) => entry.trim());
+    const resolved = entries.map(resolvePartnerEntry);
+    if (entries.length === 0 || entries.some((entry) => !entry) || resolved.some((partner) => !partner)) {
+      return { partners: [], line: explicitIndex, error: "incomplete", explicit: true };
+    }
+    const partners = [...new Set(resolved as string[])];
+    return { partners, line: explicitIndex, error: null, explicit: true };
+  }
+
+  const dateOnly = new RegExp(String.raw`^\s*[-–]?\s*\(?\s*${DATE_RANGE_SOURCE}\s*\)?\s*$`, "iu");
+  const candidates: CreditPartnerList[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]!;
+    const bullet = /^\s*[-–]\s*(.+?)\s*$/u.exec(line);
+    if (!bullet || !lines[index + 1] || !dateOnly.test(lines[index + 1]!)) continue;
+    const priorNonEmpty = lines.slice(0, index).reverse().find((candidate) => candidate.trim().length > 0);
+    if (!priorNonEmpty || classifyCreditPromo(priorNonEmpty)?.kind !== "credit") continue;
+    const segmented = segmentPartnerText(bullet[1]!);
+    if (!segmented) {
+      candidates.push({ partners: [], line: index, error: "incomplete", explicit: false });
+      continue;
+    }
+    const partners = [...new Set(segmented.sequence)];
+    // A single exact alias remains on the legacy scalar path. An actual
+    // list with duplicates only is incomplete because it has fewer than two
+    // distinct partners.
+    if (segmented.sequence.length === 1 && partners.length === 1) continue;
+    const error = segmented.ambiguous ? "ambiguous" : partners.length < 2 ? "too-few" : null;
+    candidates.push({ partners, line: index, error, explicit: false });
+  }
+  if (candidates.length === 0) return null;
+  if (candidates.length > 1) return { partners: [], line: candidates[0]!.line, error: "ambiguous", explicit: false };
+  return candidates[0]!;
+}
+
 function matchesLobKeyword(subject: string, keyword: string): boolean {
   const phrase = escapeRegExp(keyword).replace(/\s+/g, String.raw`\s+`);
   return new RegExp(String.raw`(?:^|[^\p{L}\p{N}])${phrase}(?=$|[^\p{L}\p{N}])`, "iu").test(subject);
@@ -205,12 +296,12 @@ export function buildPromoName(cleanedSubject: string, partner: string | null): 
     .trim();
 }
 
-export function buildCreditPromoName(cleanedSubject: string, partner: string | null): string {
-  const meaningfulLines = cleanedSubject.split(/\r?\n/u).filter((line) =>
-    !/^\s*(?:lob|partner|партнер|період|period)\s*:/iu.test(line),
+export function buildCreditPromoName(cleanedSubject: string, partner: string | null, partnerListLine?: number): string {
+  const meaningfulLines = cleanedSubject.split(/\r?\n/u).filter((line, index) =>
+    index !== partnerListLine && !/^\s*(?:lob|partner|партнер|partners|період|period)\s*:/iu.test(line),
   );
   const source = meaningfulLines.join(" ").trim() || cleanedSubject;
-  return buildPromoName(source, partner);
+  return buildPromoName(source, partnerListLine === undefined ? partner : null);
 }
 
 export function buildFsmPromoName(cleanedSubject: string, partner: string | null): string {

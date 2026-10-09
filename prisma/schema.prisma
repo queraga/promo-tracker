@@ -91,6 +91,42 @@ model PromoPartner {
   @@index([promoId])
 }
 
+model PromoProlongationOperation {
+  id                        String   @id @default(cuid())
+  fingerprint               String   @unique
+  sourcePromoId             String
+  sourceLob                 String
+  sourceEndDate             DateTime
+  requestedEndDate          DateTime
+  resultKind                String
+  resultTargetPromoId       String
+  resultContinuationPromoId String?
+  createdAt                 DateTime @default(now())
+
+  associations PromoProlongationAssociationSnapshot[]
+
+  @@index([sourcePromoId, requestedEndDate])
+}
+
+model PromoProlongationAssociationSnapshot {
+  id                   String   @id @default(cuid())
+  operationId          String
+  sourcePromoPartnerId String
+  partnerId            String
+  rawEmailSubject      String?
+  reportReceived       Boolean
+  reportReceivedAt     DateTime?
+  firstReminderSentAt  DateTime?
+  secondReminderSentAt DateTime?
+  createdAt            DateTime
+  updatedAt            DateTime
+
+  operation PromoProlongationOperation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+
+  @@unique([operationId, sourcePromoPartnerId])
+  @@index([sourcePromoPartnerId])
+}
+
 model ReportingPeriod {
   id             String                @id @default(cuid())
   year           Int

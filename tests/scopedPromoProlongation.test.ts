@@ -21,6 +21,7 @@ const date = (value: string) => new Date(`${value}T00:00:00Z`);
 const auth = (user: User) => ({ Cookie: `${AUTH_COOKIE}=${signAuthToken(user, secret)}` });
 
 beforeEach(async () => {
+  await prisma.promoProlongationOperation.deleteMany();
   await prisma.reportingPeriod.deleteMany();
   await prisma.userPartner.deleteMany();
   await prisma.user.deleteMany();
@@ -184,6 +185,7 @@ describe("M11.3a scoped prolongation domain", () => {
     await prolongAssignedPromoPartners(first.promo.id, ["rel-allo", "rel-citrus"], "2026-10-12", first.kamB.id, new Date("2026-09-28T18:00:00Z"));
     const aThenB = await graph();
     expect(await prisma.promo.findUnique({ where: { id: first.promo.id } })).toBeNull();
+    await prisma.promoProlongationOperation.deleteMany();
     await prisma.reportingPeriod.deleteMany(); await prisma.userPartner.deleteMany(); await prisma.user.deleteMany(); await prisma.promoPartner.deleteMany(); await prisma.promo.deleteMany(); await prisma.partner.deleteMany();
     const second = await fixture();
     await prolongAssignedPromoPartners(second.promo.id, ["rel-allo", "rel-citrus"], "2026-10-12", second.kamB.id, now);
@@ -237,6 +239,70 @@ describe("M11.3a scoped prolongation domain", () => {
     await expect(prolongAssignedPromoPartners(promo.id, [{ promoPartnerId: "rel-rozetka", partnerId: "m113-rozetka" }], "2026-09-30", kamA.id, now)).resolves.toEqual({ kind: "extended", refreshRequired: true });
   });
 
+  it("replays complete source evacuation exactly and preserves both association histories", async () => {
+    const { promo, admin, rozetka } = await fixture();
+    await prisma.promoPartner.deleteMany({ where: { promoId: promo.id, id: { not: "rel-rozetka" } } });
+    const sourceRelation = await prisma.promoPartner.update({ where: { id: "rel-rozetka" }, data: {
+      rawEmailSubject: "source subject", reportReceived: true, reportReceivedAt: date("2026-09-20"),
+      firstReminderSentAt: date("2026-09-21"), secondReminderSentAt: date("2026-09-22"),
+    } });
+    const target = await prisma.promo.create({ data: { lob: promo.lob, name: "Existing target", normalizedName: promo.normalizedName, startDate: promo.startDate, endDate: date("2026-09-30"), partners: { create: {
+      id: "target-rel-rozetka", partnerId: rozetka.id, rawEmailSubject: "target subject", reportReceived: false,
+      firstReminderSentAt: null, secondReminderSentAt: date("2026-09-26"),
+    } } } });
+    const request = [{ promoPartnerId: sourceRelation.id, partnerId: rozetka.id }];
+
+    const first = await prolongAssignedPromoPartners(promo.id, request, "2026-09-30", admin.id, now);
+    expect(first).toEqual({ kind: "extended", refreshRequired: true });
+    expect(await prisma.promo.findUnique({ where: { id: promo.id } })).toBeNull();
+    expect(await prisma.promoPartner.findUniqueOrThrow({ where: { id: "target-rel-rozetka" } })).toMatchObject({
+      promoId: target.id, id: "target-rel-rozetka", rawEmailSubject: "target subject", reportReceived: false,
+      reportReceivedAt: null, firstReminderSentAt: null, secondReminderSentAt: date("2026-09-26"),
+    });
+    const operation = await prisma.promoProlongationOperation.findFirstOrThrow({ include: { associations: true } });
+    expect(operation).toMatchObject({ sourcePromoId: promo.id, sourceLob: promo.lob, sourceEndDate: promo.endDate, requestedEndDate: date("2026-09-30"), resultTargetPromoId: target.id, resultContinuationPromoId: null });
+    expect(operation.associations).toHaveLength(1);
+    expect(operation.associations[0]).toMatchObject({
+      sourcePromoPartnerId: sourceRelation.id, partnerId: rozetka.id, rawEmailSubject: "source subject",
+      reportReceived: true, reportReceivedAt: date("2026-09-20"), firstReminderSentAt: date("2026-09-21"),
+      secondReminderSentAt: date("2026-09-22"), createdAt: sourceRelation.createdAt, updatedAt: sourceRelation.updatedAt,
+    });
+    await expect(prolongAssignedPromoPartners(promo.id, [sourceRelation.id], "2026-09-30", admin.id, now)).resolves.toEqual(first);
+    await expect(prolongAssignedPromoPartners(promo.id, [...request].reverse(), "2026-09-30", admin.id, now)).resolves.toEqual(first);
+    expect(await prisma.promoProlongationOperation.count()).toBe(1);
+    expect(await prisma.promoPartner.count({ where: { promoId: target.id } })).toBe(1);
+  });
+
+  it("leaves a submitted target report and its reminder state untouched when merging", async () => {
+    const { promo, admin, rozetka } = await fixture();
+    await prisma.promoPartner.deleteMany({ where: { promoId: promo.id, id: { not: "rel-rozetka" } } });
+    await prisma.promoPartner.update({ where: { id: "rel-rozetka" }, data: { reportReceived: false, reportReceivedAt: null, rawEmailSubject: "source subject" } });
+    const target = await prisma.promo.create({ data: { lob: promo.lob, name: promo.name, normalizedName: promo.normalizedName, startDate: promo.startDate, endDate: date("2026-09-30"), partners: { create: {
+      id: "submitted-target-rozetka", partnerId: rozetka.id, reportReceived: true, reportReceivedAt: date("2026-09-27"),
+      rawEmailSubject: "target subject", firstReminderSentAt: date("2026-09-15"), secondReminderSentAt: date("2026-09-20"),
+    } } } });
+
+    await prolongAssignedPromoPartners(promo.id, [{ promoPartnerId: "rel-rozetka", partnerId: rozetka.id }], "2026-09-30", admin.id, now);
+
+    expect(await prisma.promoPartner.findUniqueOrThrow({ where: { id: "submitted-target-rozetka" } })).toMatchObject({
+      promoId: target.id, reportReceived: true, reportReceivedAt: date("2026-09-27"), rawEmailSubject: "target subject",
+      firstReminderSentAt: date("2026-09-15"), secondReminderSentAt: date("2026-09-20"),
+    });
+    expect(await prisma.promoProlongationAssociationSnapshot.findFirstOrThrow()).toMatchObject({ sourcePromoPartnerId: "rel-rozetka", rawEmailSubject: "source subject", reportReceived: false, reportReceivedAt: null });
+  });
+
+  it("does not treat a deleted source or changed selection/date as a successful replay", async () => {
+    const { promo, admin, kamA, rozetka, comfy } = await fixture();
+    await prisma.promoPartner.deleteMany({ where: { promoId: promo.id, id: { not: "rel-rozetka" } } });
+    await prolongAssignedPromoPartners(promo.id, [{ promoPartnerId: "rel-rozetka", partnerId: rozetka.id }], "2026-09-30", admin.id, now);
+    await expect(prolongAssignedPromoPartners("missing-source", [{ promoPartnerId: "rel-rozetka", partnerId: rozetka.id }], "2026-09-30", admin.id, now)).resolves.toBeNull();
+    await expect(prolongAssignedPromoPartners(promo.id, [{ promoPartnerId: "different-selection", partnerId: comfy.id }], "2026-09-30", admin.id, now)).rejects.toBeInstanceOf(ScopedProlongationConflictError);
+    await expect(prolongAssignedPromoPartners(promo.id, [{ promoPartnerId: "rel-rozetka", partnerId: rozetka.id }], "2026-10-01", admin.id, now)).resolves.toMatchObject({ kind: "split" });
+    await prisma.userPartner.delete({ where: { userId_partnerId: { userId: kamA.id, partnerId: rozetka.id } } });
+    await expect(prolongAssignedPromoPartners(promo.id, [{ promoPartnerId: "rel-rozetka", partnerId: rozetka.id }], "2026-09-30", kamA.id, now)).resolves.toBeNull();
+    expect(await prisma.promoProlongationOperation.count()).toBe(2);
+  });
+
   it("preserves an existing compatible target name and the later prolonged timestamp", async () => {
     const { promo, kamA } = await fixture();
     const later = new Date("2026-09-29T10:00:00Z");
@@ -251,6 +317,7 @@ describe("M11.3a scoped prolongation domain", () => {
       await prisma.reportingPeriod.create({ data: { year: 2026, quarter, lob: promo.lob, status: "CLOSED", closedByUserId: admin.id, closedAt: now } });
       await expect(prolongAssignedPromoPartners(promo.id, ["rel-rozetka"], "2026-10-12", kamA.id, now)).rejects.toThrow("Reporting period is closed");
       expect(await prisma.promoPartner.count({ where: { promoId: promo.id } })).toBe(4);
+      expect(await prisma.promoProlongationOperation.count()).toBe(0);
       await prisma.reportingPeriod.deleteMany(); await prisma.userPartner.deleteMany(); await prisma.user.deleteMany(); await prisma.promoPartner.deleteMany(); await prisma.promo.deleteMany(); await prisma.partner.deleteMany();
     }
   });
@@ -330,6 +397,27 @@ describe("M11.3a scoped prolongation API", () => {
     expect(await prisma.promo.count()).toBe(2);
   });
 
+  it("converges concurrent identical requests after complete source evacuation", async () => {
+    const { promo, admin, rozetka, comfy, allo, citrus } = await fixture();
+    await prisma.promo.create({ data: { lob: promo.lob, name: promo.name, normalizedName: promo.normalizedName, startDate: promo.startDate, endDate: date("2026-09-30") } });
+    const ids = ["rel-rozetka", "rel-comfy", "rel-allo", "rel-citrus"];
+    const selections = [
+      { promoPartnerId: "rel-rozetka", partnerId: rozetka.id },
+      { promoPartnerId: "rel-comfy", partnerId: comfy.id },
+      { promoPartnerId: "rel-allo", partnerId: allo.id },
+      { promoPartnerId: "rel-citrus", partnerId: citrus.id },
+    ];
+    const results = await Promise.all([
+      prolongAssignedPromoPartners(promo.id, selections, "2026-09-30", admin.id, now),
+      prolongAssignedPromoPartners(promo.id, selections, "2026-09-30", admin.id, now),
+    ]);
+    expect(results).toEqual([{ kind: "extended", refreshRequired: true }, { kind: "extended", refreshRequired: true }]);
+    expect(await prisma.promo.findUnique({ where: { id: promo.id } })).toBeNull();
+    expect(await prisma.promoProlongationOperation.count()).toBe(1);
+    expect(await prisma.promoProlongationAssociationSnapshot.count()).toBe(ids.length);
+    expect(await prisma.promoPartner.count({ where: { promo: { endDate: date("2026-09-30") } } })).toBe(ids.length);
+  });
+
   it("reuses selected target associations and leaves unselected source partners untouched", async () => {
     const { promo, admin, rozetka, comfy, allo } = await fixture();
     const target = await prisma.promo.create({ data: { lob: promo.lob, name: "Existing target", normalizedName: promo.normalizedName, startDate: promo.startDate, endDate: date("2026-09-30"), prolongedAt: now, partners: { create: { partnerId: comfy.id } } } });
@@ -365,6 +453,7 @@ describe("M11.3a scoped prolongation API", () => {
     await expect(prolongAssignedPromoPartners(promo.id, [{ promoPartnerId: "rel-rozetka", partnerId: rozetka.id }, { promoPartnerId: "rel-comfy", partnerId: comfy.id }], "2026-09-30", admin.id, now, failAfterWork)).rejects.toThrow("simulated transaction failure");
     expect(await prisma.promoPartner.count({ where: { promoId: promo.id } })).toBe(4);
     expect(await prisma.promoPartner.count({ where: { promoId: target.id } })).toBe(0);
+    expect(await prisma.promoProlongationOperation.count()).toBe(0);
   });
 
   it("maps malformed, unavailable, stale and ended requests without leaking relation details", async () => {
@@ -378,7 +467,7 @@ describe("M11.3a scoped prolongation API", () => {
     expect((await api().post(`/api/promos/${promo.id}/prolong-partners`).set(auth(zero)).send({ promoPartnerIds: ["rel-rozetka"], endDate: "2026-09-30" })).status).toBe(404);
     expect((await api().post("/api/promos/missing/prolong-partners").set(auth(kamA)).send({ promoPartnerIds: ["rel-rozetka"], endDate: "2026-09-30" })).status).toBe(404);
     expect((await api().post(`/api/promos/${promo.id}/prolong-partners`).set(auth(kamA)).send({ promoPartnerIds: ["rel-rozetka"], endDate: "2026-09-30" })).status).toBe(200);
-    expect((await api().post(`/api/promos/${promo.id}/prolong-partners`).set(auth(kamA)).send({ promoPartnerIds: ["rel-rozetka"], endDate: "2026-09-30" })).status).toBe(409);
+    expect((await api().post(`/api/promos/${promo.id}/prolong-partners`).set(auth(kamA)).send({ promoPartnerIds: ["rel-rozetka"], endDate: "2026-09-30" })).status).toBe(200);
     const endedApi = request(createApi({ jwtSecret: secret, now: () => date("2026-09-29") }));
     expect((await endedApi.post(`/api/promos/${promo.id}/prolong-partners`).set(auth(kamA)).send({ promoPartnerIds: ["rel-comfy"], endDate: "2026-09-30" })).status).toBe(409);
   });

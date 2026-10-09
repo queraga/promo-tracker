@@ -271,8 +271,22 @@ export function detectLob(subject: string): Lob | null {
 export function buildPromoName(cleanedSubject: string, partner: string | null): string {
   const lobLine = cleanedSubject.split(/\r?\n/u).find((line) => /^\s*lob\s*:/iu.test(line));
   let result = lobLine ? lobLine.replace(/^\s*lob\s*:\s*/iu, "") : cleanedSubject;
+  const hasMultiplePartners = new Set(allPartnerMatches(result).map(({ canonical }) => canonical)).size > 1;
 
-  if (partner) {
+  if (hasMultiplePartners) {
+    const matches = allPartnerMatches(result);
+    const selected: PartnerMatch[] = [];
+    let cursor = -1;
+    for (const match of matches) {
+      if (match.start < cursor) continue;
+      selected.push(match);
+      cursor = match.end;
+    }
+    result = selected.reduceRight(
+      (value, match) => value.slice(0, match.start) + value.slice(match.end),
+      result,
+    );
+  } else if (partner) {
     const match = findPartnerMatch(result);
     if (match?.canonical === partner) {
       const before = result.slice(0, match.start).replace(/\s+[-–]\s*$/u, " ");
@@ -280,17 +294,29 @@ export function buildPromoName(cleanedSubject: string, partner: string | null): 
     }
   }
 
-  const periodWithDecoration = new RegExp(
-    String.raw`(?:(?:період|period)\s*)?\(?\s*${DATE_RANGE_SOURCE}\s*\)?`,
-    "giu",
-  );
-  result = result.replace(periodWithDecoration, " ");
+  if (!hasMultiplePartners) {
+    const periodWithDecoration = new RegExp(
+      String.raw`(?:(?:період|period)\s*)?\(?\s*${DATE_RANGE_SOURCE}\s*\)?`,
+      "giu",
+    );
+    result = result.replace(periodWithDecoration, " ");
+  }
 
-  return result
+  const normalized = result
     .replace(/^\s*(?:partner|партнер)\s*:.+$/gimu, " ")
     .replace(/^\s*(?:період|period)\s*:.+$/gimu, " ")
     .replace(/\s+/gu, " ")
-    .replace(/\s+([,;:])/gu, "$1")
+    .replace(/\s+([,;:])/gu, "$1");
+
+  return (hasMultiplePartners
+    ? normalized
+      .replace(/(?:\s*[-–]\s*){2,}/gu, " - ")
+      .replace(/(?:\s*[,;]\s*){2,}/gu, ", ")
+      .replace(/\s*[-–]\s*[,;]\s*/gu, " - ")
+      .replace(/\s*[,;]\s*[-–]\s*/gu, " - ")
+      .replace(/(?:\s*[-–]\s*){2,}/gu, " - ")
+      .replace(/^\s*[-–,;]+\s*/u, "")
+    : normalized)
     .trim()
     .replace(/[\s\-–,;:.]+$/u, "")
     .trim();

@@ -111,11 +111,58 @@ describe("parsePromoSubject", () => {
     });
   });
 
-  it("removes only the recognized trailing partner occurrence", () => {
-    expect(parsePromoSubject("Kibernetiki Edition iPhone Promo - Rozetka (Offer & Split) - 25.09-27.09", now)).toMatchObject({
+  it("preserves the existing single-partner title behavior", () => {
+    expect(parsePromoSubject("Brainstorm Edition iPhone Promo - Rozetka (Offer & Split) - 25.09-27.09", now)).toMatchObject({
       partner: "Rozetka",
-      promoName: "Kibernetiki Edition iPhone Promo (Offer & Split)",
+      partnerCandidates: ["Rozetka"],
+      promoName: "Brainstorm Edition iPhone Promo (Offer & Split)",
     });
+  });
+
+  it("removes all eight recognized partners from a same-line credit promo title", () => {
+    const result = parsePromoSubject(
+      "Комерційні умови Mac, iPad - FYQ4'26 ОЧ18 01.10-31.12 - Kibernetiki iSpace KTC Comfy foxtrot epicentr citrus rozetka",
+      now,
+    );
+
+    expect(result.partnerCandidates).toEqual([
+      "Kibernetiki", "iSpace", "KTC", "Comfy", "Foxtrot", "Epicentr", "Citrus", "Rozetka",
+    ]);
+    expect(result.promoName).toBe("Комерційні умови Mac, iPad - FYQ4'26 ОЧ18 01.10-31.12");
+  });
+
+  it("removes partners listed on separate lines and keeps the inline period", () => {
+    const result = parsePromoSubject("Promo iPhone 07.10-20.10\nKTC\nRozetka", now);
+    expect(result.partnerCandidates).toEqual(["KTC", "Rozetka"]);
+    expect(result.promoName).toBe("Promo iPhone 07.10-20.10");
+  });
+
+  it("cleans comma-separated partner aliases with case-insensitive multi-word matching", () => {
+    const result = parsePromoSubject("Promo iPhone - SOTA ALLIANCE, dc-link - 07.10-20.10", now);
+    expect(result.partnerCandidates).toEqual(["Sota Alliance", "DC Link"]);
+    expect(result.promoName).toBe("Promo iPhone - 07.10-20.10");
+  });
+
+  it("does not remove a partner-like substring inside an unrelated word", () => {
+    const result = parsePromoSubject("MegaBrain Promo - Rozetka, Comfy - 07.10-20.10", now);
+    expect(result.partnerCandidates).toEqual(["Rozetka", "Comfy"]);
+    expect(result.promoName).toBe("MegaBrain Promo - 07.10-20.10");
+  });
+
+  it("does not trigger multi-partner title normalization for duplicate mentions of one partner", () => {
+    const result = parsePromoSubject("Promo iPhone - Rozetka Rozetka - 07.10-20.10", now);
+    expect(result.partnerCandidates).toEqual(["Rozetka"]);
+    expect(result.promoName).toBe("Promo iPhone Rozetka");
+  });
+
+  it.each([
+    "Promo iPhone - Rozetka, Comfy - 07.10-20.10",
+    "Promo iPhone - Rozetka - Comfy - 07.10-20.10",
+    "Promo iPhone - Rozetka, Comfy, - 07.10-20.10",
+  ])("removes leftover separators and extra whitespace: %s", (subject) => {
+    const result = parsePromoSubject(subject, now);
+    expect(result.promoName).toBe("Promo iPhone - 07.10-20.10");
+    expect(result.promoName).not.toMatch(/(?:--|,,|,\s*-|\s{2,}|[-,;:]\s*$)/u);
   });
 
   it.each([

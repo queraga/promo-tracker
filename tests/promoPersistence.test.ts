@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createPromoFromParsedSubject } from "../src/features/createPromo/createPromoFromParsedSubject.js";
+import { createPromoFromParsedSubject, createPromoOperationFromParsedSubject } from "../src/features/createPromo/createPromoFromParsedSubject.js";
 import { InvalidParsedPromoSubjectError } from "../src/features/createPromo/createPromo.types.js";
 import { ClosedReportingPeriodError } from "../src/features/quarterlyReporting/closedPeriods.js";
 import { parsePromoSubject } from "../src/features/parsePromoSubject/parsePromoSubject.js";
@@ -26,6 +26,46 @@ beforeEach(async () => {
 });
 
 describe("promo persistence", () => {
+  it("persists an inline multi-partner credit promo as one Promo with all partner relations idempotently", async () => {
+    const input = "Комерційні умови Mac, iPad - FYQ4'26 ОЧ18 01.10-31.12 - Kibernetiki iSpace KTC Comfy foxtrot epicentr citrus rozetka";
+    const parsedInput = parsed(input);
+    const first = await createPromoOperationFromParsedSubject(parsedInput);
+    const repeated = await createPromoOperationFromParsedSubject(parsedInput);
+    const expectedPartners = ["Kibernetiki", "iSpace", "KTC", "Comfy", "Foxtrot", "Epicentr", "Citrus", "Rozetka"];
+    const promos = await prisma.promo.findMany({ include: { partners: { include: { partner: true } } } });
+
+    expect(first.promos).toHaveLength(8);
+    expect(new Set(first.promos.map(({ promo }) => promo.id)).size).toBe(1);
+    expect(repeated.promos.every(({ createdPromo, createdPromoPartner }) => !createdPromo && !createdPromoPartner)).toBe(true);
+    expect(promos).toHaveLength(1);
+    expect(promos[0]).toMatchObject({
+      name: "Комерційні умови Mac, iPad - FYQ4'26 ОЧ18 01.10-31.12",
+      lob: "Mac iPad",
+      startDate: new Date("2026-10-01T00:00:00.000Z"),
+      endDate: new Date("2026-12-31T00:00:00.000Z"),
+    });
+    expect(promos[0]!.partners.map(({ partner }) => partner.name)).toEqual(expectedPartners);
+    expect(promos[0]!.partners.every(({ rawEmailSubject }) => rawEmailSubject === input)).toBe(true);
+    expect(await prisma.promo.count()).toBe(1);
+    expect(await prisma.promoPartner.count()).toBe(8);
+  });
+
+  it("deduplicates repeated partner aliases when persisting a credit promo", async () => {
+    const input = "ОЧ18 Приват iPhone promotion 01.10-31.12 - Kibernetiki kibernetiki KTC ктс";
+    const result = await createPromoOperationFromParsedSubject(parsed(input));
+
+    expect(result.promos.map(({ partner }) => partner.name)).toEqual(["Kibernetiki", "KTC"]);
+    expect(await prisma.promo.count()).toBe(1);
+    expect(await prisma.promoPartner.count()).toBe(2);
+  });
+
+  it("keeps single-partner credit creation on the scalar path", async () => {
+    const result = await createPromoFromParsedSubject(parsed("ОЧ18 Приват iPhone promotion 01.10-31.12 - Citrus"));
+    expect(result.partner.name).toBe("Citrus");
+    expect(await prisma.promo.count()).toBe(1);
+    expect(await prisma.promoPartner.count()).toBe(1);
+  });
+
   it("creates one Promo, Partner, and PromoPartner", async () => {
     const result = await createPromoFromParsedSubject(parsed(iphoneRozetka));
     expect(result).toMatchObject({ createdPromo: true, createdPartner: true, createdPromoPartner: true });

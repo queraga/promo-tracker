@@ -131,6 +131,49 @@ describe("parsePromoSubject", () => {
     expect(result.promoName).toBe("Комерційні умови Mac, iPad - FYQ4'26 ОЧ18 01.10-31.12");
   });
 
+  it("selects every distinct recognized partner from an inline credit partner list", () => {
+    const result = parsePromoSubject(
+      "Комерційні умови Mac, iPad - FYQ4'26 ОЧ18 01.10-31.12 - Kibernetiki iSpace KTC Comfy foxtrot epicentr citrus rozetka",
+      now,
+    );
+    const expectedPartners = ["Kibernetiki", "iSpace", "KTC", "Comfy", "Foxtrot", "Epicentr", "Citrus", "Rozetka"];
+
+    expect(result).toMatchObject({
+      credit: { bank: "PRIVATBANK", mechanic: "ОЧ18" },
+      lob: "Mac iPad",
+      partner: "Kibernetiki",
+      partnerCandidates: expectedPartners,
+      selectedPartners: expectedPartners,
+      startDate: "2026-10-01",
+      endDate: "2026-12-31",
+      promoName: "Комерційні умови Mac, iPad - FYQ4'26 ОЧ18 01.10-31.12",
+      isValid: true,
+      warnings: [],
+    });
+  });
+
+  it("deduplicates partner aliases before selecting an inline credit partner set", () => {
+    const result = parsePromoSubject(
+      "ОЧ18 Приват iPhone promotion 01.10-31.12 - Kibernetiki kibernetiki iSpace ISPACE",
+      now,
+    );
+    expect(result.partnerCandidates).toEqual(["Kibernetiki", "iSpace"]);
+    expect(result.selectedPartners).toEqual(["Kibernetiki", "iSpace"]);
+  });
+
+  it("recognizes a complete inline partner suffix on separate lines", () => {
+    const result = parsePromoSubject("ОЧ18 Приват Mac iPad 01.10-31.12\nKibernetiki\niSpace", now);
+    expect(result.selectedPartners).toEqual(["Kibernetiki", "iSpace"]);
+    expect(result.partner).toBe("Kibernetiki");
+    expect(result.isValid).toBe(true);
+  });
+
+  it("keeps a one-partner credit promo on the existing scalar path", () => {
+    const result = parsePromoSubject("ОЧ18 Приват iPhone promotion 01.10-31.12 - Citrus", now);
+    expect(result).toMatchObject({ partner: "Citrus", partnerCandidates: ["Citrus"], credit: { bank: "PRIVATBANK", mechanic: "ОЧ18" } });
+    expect(result.selectedPartners).toBeUndefined();
+  });
+
   it("removes partners listed on separate lines and keeps the inline period", () => {
     const result = parsePromoSubject("Promo iPhone 07.10-20.10\nKTC\nRozetka", now);
     expect(result.partnerCandidates).toEqual(["KTC", "Rozetka"]);

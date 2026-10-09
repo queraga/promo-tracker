@@ -232,9 +232,35 @@ export function extractCreditPartnerList(subject: string): CreditPartnerList {
     const error = segmented.ambiguous ? "ambiguous" : partners.length < 2 ? "too-few" : null;
     candidates.push({ partners, line: index, error, explicit: false });
   }
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0) {
+    // Some credit messages place an unlabelled partner list after the period
+    // on the same line. Accept it only when the complete suffix segments into
+    // known aliases, so partner-like words in campaign titles remain title text.
+    const dateMatches = [...subject.matchAll(new RegExp(DATE_RANGE_SOURCE, "g"))];
+    const lastDate = dateMatches.at(-1);
+    if (!lastDate || lastDate.index === undefined) return null;
+    const suffix = subject.slice(lastDate.index + lastDate[0].length)
+      .replace(/^[\s\-–,;:()]+/u, "")
+      .replace(/[\s\-–,;:()]+$/u, "");
+    const segmented = segmentPartnerText(suffix);
+    if (!segmented || segmented.ambiguous) return null;
+    const partners = [...new Set(segmented.sequence)];
+    if (partners.length < 2) return null;
+    return { partners, line: -1, error: null, explicit: false };
+  }
   if (candidates.length > 1) return { partners: [], line: candidates[0]!.line, error: "ambiguous", explicit: false };
   return candidates[0]!;
+}
+
+/**
+ * Resolves the partner set accepted for a credit promo. Only explicitly
+ * structured or fully segmented trailing lists become multi-partner input.
+ */
+export function selectCreditPromoPartners(creditPartnerList: CreditPartnerList): string[] | undefined {
+  if (creditPartnerList?.error === null && (creditPartnerList.partners.length > 1 || creditPartnerList.explicit)) {
+    return creditPartnerList.partners;
+  }
+  return undefined;
 }
 
 function matchesLobKeyword(subject: string, keyword: string): boolean {

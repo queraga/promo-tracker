@@ -107,6 +107,24 @@ describe("Telegram bot workflows", () => {
     expect(result.text).toContain("Промо:\nОЧ15 Приват iPhone initiative");
   });
 
+  it("previews all inline credit partners with the corrected title and one Add action", () => {
+    const result = handlePromoSubject(
+      "Комерційні умови Mac, iPad - FYQ4'26 ОЧ18 01.10-31.12 - Kibernetiki iSpace KTC Comfy foxtrot epicentr citrus rozetka",
+      identity,
+      makeStore(),
+      currentDate,
+    );
+    expect(result.kind).toBe("preview");
+    if (result.kind !== "preview") return;
+    expect(result.text).toContain("Bank: ПриватБанк");
+    expect(result.text).toContain("Mechanic: ОЧ18");
+    expect(result.text).toContain("LOB: Mac iPad ✓");
+    expect(result.text).toContain("Partners: Kibernetiki, iSpace, KTC, Comfy, Foxtrot, Epicentr, Citrus, Rozetka ✓");
+    expect(result.text).toContain("Period: 01.10.2026 - 31.12.2026 ✓");
+    expect(result.text).toContain("Промо:\nКомерційні умови Mac, iPad - FYQ4'26 ОЧ18 01.10-31.12");
+    expect(result.confirmationId).toBe("confirmation-1");
+  });
+
   it("does not offer Add for an incomplete credit partner list", () => {
     const result = handlePromoSubject(
       "ОЧ15 Приват iPhone initiative\n- ОЧ15 ПриватБанк\n- Rozetka Kibernetiki UnknownPartner\n- 01.10-31.12",
@@ -178,6 +196,26 @@ describe("Telegram bot workflows", () => {
     expect((await handlePromoCallback("add", id, identity, store, persist)).kind).toBe("added");
     expect(persist).toHaveBeenCalledTimes(1);
     expect(store.getPendingPromo(id, identity).status).toBe("missing");
+  });
+
+  it("passes all selected partners through the Telegram Add callback", async () => {
+    const store = makeStore();
+    const preview = handlePromoSubject(
+      "ОЧ18 Приват iPhone promo 01.10-31.12 - Kibernetiki iSpace KTC",
+      identity,
+      store,
+      currentDate,
+    );
+    expect(preview.kind).toBe("preview");
+    if (preview.kind !== "preview") return;
+    const persist = vi.fn().mockResolvedValue(createResult());
+
+    const result = await handlePromoCallback("add", preview.confirmationId, identity, store, persist);
+
+    expect(result.kind).toBe("added");
+    expect(persist).toHaveBeenCalledWith(expect.objectContaining({
+      selectedPartners: ["Kibernetiki", "iSpace", "KTC"],
+    }));
   });
 
   it("keeps a pending confirmation when persistence fails and allows retry", async () => {

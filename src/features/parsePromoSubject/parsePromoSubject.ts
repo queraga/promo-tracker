@@ -13,6 +13,7 @@ import {
   normalizePromoName,
   normalizeCreditPromoName,
   stripEmailPrefixes,
+  selectCreditPromoPartners,
   uniqueWarnings,
 } from "./parsePromoSubject.utils.js";
 
@@ -35,8 +36,8 @@ export function parsePromoSubject(
   const creditPartnerList = credit && !isFsm && classificationConflict === null
     ? extractCreditPartnerList(cleanedSubject)
     : null;
-  const selectedPartners = creditPartnerList?.error === null && (creditPartnerList.partners.length > 1 || creditPartnerList.explicit)
-    ? creditPartnerList.partners
+  const selectedPartners = credit && !isFsm && classificationConflict === null
+    ? selectCreditPromoPartners(creditPartnerList)
     : undefined;
   const partner = selectedPartners?.[0] ?? (isFsm
     ? partnerCandidates.length === 1 ? partnerCandidates[0] : null

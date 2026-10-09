@@ -4,7 +4,7 @@ import { prisma } from "../../shared/db/prisma.js";
 import { withSqliteBusyRetry } from "../../shared/db/withSqliteBusyRetry.js";
 import { parsePromoDate } from "../../shared/date/parsePromoDate.js";
 import { classifyCreditPromo, isAllLobRequest, ATOMIC_CREDIT_LOBS } from "../creditPromo/creditPromo.js";
-import { normalizeCreditPromoName, extractPartnerCandidates, extractCreditPartnerList, isFsmPromoSubject, stripEmailPrefixes } from "../parsePromoSubject/parsePromoSubject.utils.js";
+import { normalizeCreditPromoName, extractPartnerCandidates, extractCreditPartnerList, isFsmPromoSubject, selectCreditPromoPartners, stripEmailPrefixes } from "../parsePromoSubject/parsePromoSubject.utils.js";
 import type { CreatePromoOperationResult, CreatePromoResult } from "./createPromo.types.js";
 import { InvalidParsedPromoSubjectError } from "./createPromo.types.js";
 import { assertReportingPeriodOpen } from "../quarterlyReporting/closedPeriods.js";
@@ -30,8 +30,8 @@ export async function createPromoOperationFromParsedSubject(
     ? extractCreditPartnerList(raw)
     : null;
   const multiPartners = parsed.selectedPartners;
-  const rawSelectedPartners = rawCreditPartnerList?.error === null && (rawCreditPartnerList.partners.length > 1 || rawCreditPartnerList.explicit)
-    ? rawCreditPartnerList.partners
+  const rawSelectedPartners = rawCredit !== null && !rawSubjectIsFsm && rawConflict === null
+    ? selectCreditPromoPartners(rawCreditPartnerList)
     : undefined;
   if (
     !parsed.isValid ||
@@ -40,7 +40,7 @@ export async function createPromoOperationFromParsedSubject(
     parsed.allLob !== rawAllLob ||
     JSON.stringify(parsed.credit) !== JSON.stringify(rawCredit) ||
     (multiPartners !== undefined && (
-      !rawCredit || rawSubjectIsFsm || !rawCreditPartnerList || rawCreditPartnerList.error !== null ||
+      !rawCredit || rawSubjectIsFsm || rawConflict !== null ||
       JSON.stringify(multiPartners) !== JSON.stringify(rawSelectedPartners) ||
       multiPartners.length < 2 || parsed.partner !== multiPartners[0]
     )) ||

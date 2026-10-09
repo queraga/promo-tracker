@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import type { CurrentUser, PromoDto, PromoPartnerOption, PromoStatus, ProlongPromoResult, ScopedProlongationResult } from "../types";
-import { addPromoPartners, getPromoPartnerOptions, prolongAssignedPromoPartners, prolongPromo } from "../shared/api/client";
+import { addPromoPartners, getPromoPartnerOptions, prolongAssignedPromoPartners } from "../shared/api/client";
 import { canExpandPromoPartners, canManagePromos, canMutateReports, canProlongAssignedPromoPartners } from "../shared/lib/admin";
-import { isKamProlongationEligible, ProlongationDialog, prolongationErrorMessage, ScopedProlongationDialog, scopedProlongationErrorMessage } from "./PromoProlongation";
+import { isKamProlongationEligible, ScopedProlongationDialog, scopedProlongationErrorMessage } from "./PromoProlongation";
 
 const labels: Record<PromoStatus, string> = { active: "Активне", planned: "Заплановане", finished: "Завершене" };
 const formatDate = (value: string) => new Intl.DateTimeFormat("uk-UA", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(value));
@@ -32,20 +32,16 @@ export function PromoDrawer({ promo, user, busyId, onClose, onToggle, onDeletePr
   const [selectedPartnerIds, setSelectedPartnerIds] = useState<string[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [prolonging, setProlonging] = useState(false);
-  const [prolongEndDate, setProlongEndDate] = useState("");
-  const [prolongSubmitting, setProlongSubmitting] = useState(false);
-  const [prolongError, setProlongError] = useState("");
   const [scopedProlonging, setScopedProlonging] = useState(false);
   const [scopedEndDate, setScopedEndDate] = useState("");
   const [scopedSelectedIds, setScopedSelectedIds] = useState<string[]>([]);
   const [scopedSubmitting, setScopedSubmitting] = useState(false);
   const [scopedError, setScopedError] = useState("");
-  useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === "Escape") { if (scopedProlonging && !scopedSubmitting) setScopedProlonging(false); else if (prolonging && !prolongSubmitting) setProlonging(false); else if (expanding) setExpanding(false); else onClose(); } }; window.addEventListener("keydown", close); return () => window.removeEventListener("keydown", close); }, [expanding, onClose, prolonging, prolongSubmitting, scopedProlonging, scopedSubmitting]);
+  useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === "Escape") { if (scopedProlonging && !scopedSubmitting) setScopedProlonging(false); else if (expanding) setExpanding(false); else onClose(); } }; window.addEventListener("keydown", close); return () => window.removeEventListener("keydown", close); }, [expanding, onClose, scopedProlonging, scopedSubmitting]);
   const superuser = canManagePromos(user);
   const canExpand = canExpandPromoPartners(user);
   const canReport = canMutateReports(user);
-  const canScopedProlong = canProlongAssignedPromoPartners(user) && promo.status !== "finished" && isKamProlongationEligible(promo) && promo.partners.length > 0;
+  const canScopedProlong = (superuser || (canProlongAssignedPromoPartners(user) && promo.status !== "finished" && isKamProlongationEligible(promo))) && promo.partners.length > 0;
   const openExpansion = async () => {
     setExpanding(true); setLoadingOptions(true); setSelectedPartnerIds([]);
     try { setOptions(await getPromoPartnerOptions(promo.id)); }
@@ -58,13 +54,6 @@ export function PromoDrawer({ promo, user, busyId, onClose, onToggle, onDeletePr
     catch (reason) { onError((reason as Error).message); }
     finally { setSubmitting(false); }
   };
-  const confirmProlongation = async () => {
-    if (prolongSubmitting) return;
-    setProlongSubmitting(true); setProlongError("");
-    try { const result = await prolongPromo(promo.id, prolongEndDate); setProlonging(false); setProlongEndDate(""); onProlonged(result); }
-    catch (reason) { setProlongError(prolongationErrorMessage(reason)); }
-    finally { setProlongSubmitting(false); }
-  };
   const openScopedProlongation = () => {
     setScopedSelectedIds(scopedPartnerSelection(promo)); setScopedEndDate(""); setScopedError(""); setScopedProlonging(true);
   };
@@ -72,7 +61,8 @@ export function PromoDrawer({ promo, user, busyId, onClose, onToggle, onDeletePr
     if (scopedSubmitting || scopedSelectedIds.length === 0) return;
     setScopedSubmitting(true); setScopedError("");
     try {
-      const result = await prolongAssignedPromoPartners(promo.id, scopedSelectedIds, scopedEndDate);
+      const selections = promo.partners.filter(({ promoPartnerId }) => scopedSelectedIds.includes(promoPartnerId)).map(({ promoPartnerId, partnerId }) => ({ promoPartnerId, partnerId }));
+      const result = await prolongAssignedPromoPartners(promo.id, selections, scopedEndDate);
       setScopedProlonging(false); setScopedEndDate(""); setScopedSelectedIds([]); onScopedProlonged?.(result);
     } catch (reason) { setScopedError(scopedProlongationErrorMessage(reason)); }
     finally { setScopedSubmitting(false); }
@@ -80,7 +70,6 @@ export function PromoDrawer({ promo, user, busyId, onClose, onToggle, onDeletePr
   return <><button className="drawer-backdrop" aria-label="Закрити деталі" onClick={onClose} /><aside className="drawer" aria-label="Деталі промо"><header><div><span className="eyebrow">{promo.lob}</span><h2>{promo.name}</h2></div><button className="close" onClick={onClose} aria-label="Закрити">×</button></header>
     <dl className="details"><div><dt>Період</dt><dd>{formatDate(promo.startDate)} — {formatDate(promo.endDate)}</dd></div><div><dt>Статус</dt><dd><span className={`badge ${promo.status}`}>{labels[promo.status]}</span></dd></div></dl>
     <section><div className="drawer-section-heading"><h3>Партнери</h3>{canExpand && <button type="button" className="add-partners" onClick={() => void openExpansion()}>Додати партнерів</button>}</div>{promo.partners.map((partner) => <article className="partner-detail" key={partner.promoPartnerId}><div className="partner-row"><div><strong>{partner.partnerName}</strong><span>{partner.reportReceived ? "Звіт отримано" : promo.status === "finished" ? "Очікується звіт" : "Звіт ще не очікується"}</span></div><div className="partner-actions">{canReport && <button disabled={busyId === partner.promoPartnerId} className={partner.reportReceived ? "report received" : "report"} onClick={() => onToggle(partner.promoPartnerId, !partner.reportReceived)}>{partner.reportReceived ? "✓ Отримано" : "Позначити отриманим"}</button>}{superuser && <button className="danger-link" onClick={() => onRemovePartner(promo, partner.partnerId, partner.partnerName)}>Видалити зв’язок</button>}</div></div>{partner.rawEmailSubject ? <div className="subject"><span>Вхідний текст</span><code>{partner.rawEmailSubject}</code></div> : <div className="manual-relation">Додано вручну</div>}</article>)}</section>
-    {canScopedProlong && <section className="promo-actions"><h3>Дії</h3><button className="prolong-button" onClick={openScopedProlongation}>Пролонгація</button></section>}
-    {superuser && <section className="danger-zone"><h3>Адміністрування</h3><div className="promo-admin-actions"><button className="prolong-button" onClick={() => { setProlongError(""); setProlongEndDate(""); setProlonging(true); }}>Пролонгація</button><button className="danger-button" onClick={() => onDeletePromo(promo)}>Видалити промо</button></div></section>}
-  </aside>{canExpand && expanding && <PartnerExpansionDialog options={options} selected={selectedPartnerIds} loading={loadingOptions} submitting={submitting} onToggle={(id) => setSelectedPartnerIds((current) => togglePartnerSelection(current, id))} onSelectAll={() => setSelectedPartnerIds(selectAllAvailablePartners(options))} onCancel={() => { setExpanding(false); setSelectedPartnerIds([]); }} onAdd={() => void addPartners()} />}{superuser && prolonging && <ProlongationDialog promo={promo} endDate={prolongEndDate} submitting={prolongSubmitting} error={prolongError} onEndDateChange={(value) => { setProlongEndDate(value); setProlongError(""); }} onCancel={() => { setProlonging(false); setProlongEndDate(""); setProlongError(""); }} onConfirm={() => void confirmProlongation()} />}{canScopedProlong && scopedProlonging && <ScopedProlongationDialog promo={promo} endDate={scopedEndDate} submitting={scopedSubmitting} error={scopedError} selectedPromoPartnerIds={scopedSelectedIds} onEndDateChange={(value) => { setScopedEndDate(value); setScopedError(""); }} onTogglePartner={(id) => setScopedSelectedIds((current) => togglePartnerSelection(current, id))} onToggleAll={() => setScopedSelectedIds((current) => toggleAllScopedPartners(promo, current))} onCancel={() => { setScopedProlonging(false); setScopedEndDate(""); setScopedSelectedIds([]); setScopedError(""); }} onConfirm={() => void confirmScopedProlongation()} />}</>;
+    {canScopedProlong && (superuser ? <section className="danger-zone"><h3>Адміністрування</h3><div className="promo-admin-actions"><button className="prolong-button" onClick={openScopedProlongation}>Пролонгація</button><button className="danger-button" onClick={() => onDeletePromo(promo)}>Видалити промо</button></div></section> : <section className="promo-actions"><h3>Дії</h3><button className="prolong-button" onClick={openScopedProlongation}>Пролонгація</button></section>)}
+  </aside>{canExpand && expanding && <PartnerExpansionDialog options={options} selected={selectedPartnerIds} loading={loadingOptions} submitting={submitting} onToggle={(id) => setSelectedPartnerIds((current) => togglePartnerSelection(current, id))} onSelectAll={() => setSelectedPartnerIds(selectAllAvailablePartners(options))} onCancel={() => { setExpanding(false); setSelectedPartnerIds([]); }} onAdd={() => void addPartners()} />}{canScopedProlong && scopedProlonging && <ScopedProlongationDialog promo={promo} endDate={scopedEndDate} submitting={scopedSubmitting} error={scopedError} selectedPromoPartnerIds={scopedSelectedIds} onEndDateChange={(value) => { setScopedEndDate(value); setScopedError(""); }} onTogglePartner={(id) => setScopedSelectedIds((current) => togglePartnerSelection(current, id))} onToggleAll={() => setScopedSelectedIds((current) => toggleAllScopedPartners(promo, current))} onCancel={() => { setScopedProlonging(false); setScopedEndDate(""); setScopedSelectedIds([]); setScopedError(""); }} onConfirm={() => void confirmScopedProlongation()} />}</>;
 }

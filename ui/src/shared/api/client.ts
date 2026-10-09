@@ -10,7 +10,7 @@ export const getPromo = (id: string) => apiFetch<PromoDto>(`/api/promos/${id}`);
 export const getPromoPartnerOptions = (id: string) => apiFetch<PromoPartnerOption[]>(`/api/promos/${id}/partner-options`);
 export const addPromoPartners = (id: string, partnerIds: string[]) => apiFetch<PromoDto>(`/api/promos/${id}/partners`, { method: "POST", body: JSON.stringify({ partnerIds }) });
 export const prolongPromo = (id: string, endDate: string) => apiFetch<ProlongPromoResult>(`/api/promos/${id}/prolong`, { method: "POST", body: JSON.stringify({ endDate }) });
-export const prolongAssignedPromoPartners = (id: string, promoPartnerIds: string[], endDate: string) => apiFetch<ScopedProlongationResult>(`/api/promos/${id}/prolong-partners`, { method: "POST", body: JSON.stringify({ promoPartnerIds, endDate }) });
+export const prolongAssignedPromoPartners = (id: string, promoPartnerSelections: Array<{ promoPartnerId: string; partnerId: string }>, endDate: string) => apiFetch<ScopedProlongationResult>(`/api/promos/${id}/prolong-partners`, { method: "POST", body: JSON.stringify({ promoPartnerSelections, endDate }) });
 export const getPendingReports = () => apiFetch<unknown[]>("/api/reports/pending");
 export const updateReportStatus = (id: string, received: boolean) => apiFetch<{ promoPartnerId: string; reportReceived: boolean; reportReceivedAt: string | null }>(`/api/promo-partners/${id}/report`, { method: "PATCH", body: JSON.stringify({ received }) });
 export const deletePromo = (id: string) => apiFetch<{ success: boolean }>(`/api/promos/${id}`, { method: "DELETE" });

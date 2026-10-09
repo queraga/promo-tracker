@@ -19,6 +19,7 @@ describe("role capabilities", () => {
     expect(hasCapability("KAM", "mutateReportState")).toBe(true);
     expect(hasCapability("KAM", "expandPromoPartners")).toBe(true);
     expect(hasCapability("KAM", "prolongAssignedPromoPartners")).toBe(true);
+    expect(hasCapability("SUPERUSER", "prolongAssignedPromoPartners")).toBe(true);
     expect(hasCapability("PLM", "prolongAssignedPromoPartners")).toBe(false);
     expect(hasCapability("KAM", "manageUsers")).toBe(false);
     expect(hasCapability("KAM", "deletePromo")).toBe(false);

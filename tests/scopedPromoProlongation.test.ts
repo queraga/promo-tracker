@@ -1,4 +1,5 @@
 import type { User } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApi } from "../src/api/createApi.js";
@@ -35,11 +36,12 @@ async function fixture() {
     prisma.user.create({ data: { email: "a@m113.test", passwordHash: "hash", role: "KAM" } }),
     prisma.user.create({ data: { email: "b@m113.test", passwordHash: "hash", role: "KAM" } }),
   ]);
-  const [rozetka, comfy, allo, citrus] = await Promise.all([
+  const [rozetka, comfy, allo, citrus, foxtrot] = await Promise.all([
     prisma.partner.create({ data: { id: "m113-rozetka", name: "Rozetka" } }),
     prisma.partner.create({ data: { id: "m113-comfy", name: "Comfy" } }),
     prisma.partner.create({ data: { id: "m113-allo", name: "ALLO" } }),
     prisma.partner.create({ data: { id: "m113-citrus", name: "Citrus" } }),
+    prisma.partner.create({ data: { id: "m113-foxtrot", name: "Foxtrot" } }),
   ]);
   await prisma.userPartner.createMany({ data: [
     { userId: kamA.id, partnerId: rozetka.id }, { userId: kamA.id, partnerId: comfy.id },
@@ -53,7 +55,7 @@ async function fixture() {
       { id: "rel-comfy", partnerId: comfy.id }, { id: "rel-allo", partnerId: allo.id }, { id: "rel-citrus", partnerId: citrus.id },
     ] },
   } });
-  return { admin, plm, kamA, kamB, promo, rozetka, comfy, allo, citrus };
+  return { admin, plm, kamA, kamB, promo, rozetka, comfy, allo, citrus, foxtrot };
 }
 
 const graph = async () => (await prisma.promo.findMany({ include: { partners: true } })).map((promo) => ({
@@ -225,12 +227,14 @@ describe("M11.3a scoped prolongation domain", () => {
     await expect(prolongAssignedPromoPartners(promo.id, ["rel-rozetka"], "2026-09-30", kamA.id, date("2026-09-28"))).resolves.toBeTruthy();
   });
 
-  it("rejects target partner conflicts without changing either history", async () => {
+  it("reuses an existing target partner association without duplicating it", async () => {
     const { promo, kamA } = await fixture();
     const target = await prisma.promo.create({ data: { lob: promo.lob, name: "Preserved target name", normalizedName: promo.normalizedName, startDate: promo.startDate, endDate: date("2026-09-30"), partners: { create: { id: "target-rozetka", partnerId: "m113-rozetka", reportReceived: false } } } });
-    await expect(prolongAssignedPromoPartners(promo.id, ["rel-rozetka"], "2026-09-30", kamA.id, now)).rejects.toBeInstanceOf(ScopedProlongationConflictError);
-    expect(await prisma.promoPartner.count({ where: { partnerId: "m113-rozetka" } })).toBe(2);
+    await expect(prolongAssignedPromoPartners(promo.id, ["rel-rozetka"], "2026-09-30", kamA.id, now)).resolves.toEqual({ kind: "extended", refreshRequired: true });
+    expect(await prisma.promoPartner.count({ where: { partnerId: "m113-rozetka" } })).toBe(1);
+    expect(await prisma.promoPartner.findUnique({ where: { id: "rel-rozetka" } })).toBeNull();
     expect((await prisma.promo.findUniqueOrThrow({ where: { id: target.id } })).name).toBe("Preserved target name");
+    await expect(prolongAssignedPromoPartners(promo.id, [{ promoPartnerId: "rel-rozetka", partnerId: "m113-rozetka" }], "2026-09-30", kamA.id, now)).resolves.toEqual({ kind: "extended", refreshRequired: true });
   });
 
   it("preserves an existing compatible target name and the later prolonged timestamp", async () => {
@@ -283,10 +287,84 @@ describe("M11.3a scoped prolongation API", () => {
     expect(split.status).toBe(201); expect(split.body).toEqual({ kind: "split", refreshRequired: true });
   });
 
-  it("keeps PLM and SUPERUSER off the scoped endpoint while preserving existing SUPERUSER M11", async () => {
+  it("keeps PLM off the scoped endpoint and authorizes SUPERUSER selection while preserving M11", async () => {
     const { promo, admin, plm } = await fixture();
-    for (const user of [admin, plm]) expect((await api().post(`/api/promos/${promo.id}/prolong-partners`).set(auth(user)).send({ promoPartnerIds: ["rel-rozetka"], endDate: "2026-09-30" })).status).toBe(403);
-    expect((await api().post(`/api/promos/${promo.id}/prolong`).set(auth(admin)).send({ endDate: "2026-09-30" })).status).toBe(200);
+    expect((await api().post(`/api/promos/${promo.id}/prolong-partners`).set(auth(plm)).send({ promoPartnerIds: ["rel-rozetka"], endDate: "2026-09-30" })).status).toBe(403);
+    expect((await api().post(`/api/promos/${promo.id}/prolong-partners`).set(auth(admin)).send({ promoPartnerSelections: [{ promoPartnerId: "rel-rozetka", partnerId: "m113-rozetka" }], endDate: "2026-09-30" })).status).toBe(200);
+    await prisma.reportingPeriod.deleteMany(); await prisma.userPartner.deleteMany(); await prisma.user.deleteMany(); await prisma.promoPartner.deleteMany(); await prisma.promo.deleteMany(); await prisma.partner.deleteMany();
+    const next = await fixture();
+    expect((await api().post(`/api/promos/${next.promo.id}/prolong`).set(auth(next.admin)).send({ endDate: "2026-09-30" })).status).toBe(200);
+  });
+
+  it("lets SUPERUSER prolong only one selected partner into a compatible existing target", async () => {
+    const { promo, admin, rozetka, citrus, comfy } = await fixture();
+    const target = await prisma.promo.create({ data: { lob: promo.lob, name: "Existing target name", normalizedName: promo.normalizedName, startDate: promo.startDate, endDate: date("2026-09-30"), prolongedAt: now, partners: { create: { partnerId: comfy.id, reportReceived: true, reportReceivedAt: date("2026-09-25") } } } });
+    const result = await prolongAssignedPromoPartners(promo.id, [{ promoPartnerId: "rel-rozetka", partnerId: rozetka.id }], "2026-09-30", admin.id, now);
+    expect(result).toEqual({ kind: "extended", refreshRequired: true });
+    expect(await prisma.promo.count()).toBe(2);
+    expect(await prisma.promo.findUniqueOrThrow({ where: { id: target.id }, include: { partners: true } })).toMatchObject({ name: "Existing target name", partners: [{ partnerId: comfy.id, reportReceived: true, reportReceivedAt: date("2026-09-25") }, { partnerId: rozetka.id }] });
+    expect(await prisma.promoPartner.findUniqueOrThrow({ where: { id: "rel-citrus" } })).toMatchObject({ promoId: promo.id, partnerId: citrus.id });
+    await expect(prolongAssignedPromoPartners(promo.id, [{ promoPartnerId: "rel-rozetka", partnerId: rozetka.id }], "2026-09-30", admin.id, now)).resolves.toEqual(result);
+  });
+
+  it("reproduces the October AirPods target collision and reuses its existing Foxtrot promo", async () => {
+    const { promo, admin, rozetka, citrus, foxtrot } = await fixture();
+    await prisma.promoPartner.deleteMany({ where: { id: { in: ["rel-comfy", "rel-allo"] } } });
+    await prisma.promo.update({ where: { id: promo.id }, data: { name: "October Promo AirPods 4, AirPods 4 ANC ()", normalizedName: "october promo airpods 4 airpods 4 anc", lob: "AirPods", startDate: date("2026-10-02"), endDate: date("2026-10-11") } });
+    const target = await prisma.promo.create({ data: { lob: "AirPods", name: "October Promo AirPods 4, AirPods 4 ANC ()", normalizedName: "october promo airpods 4 airpods 4 anc", startDate: date("2026-10-02"), endDate: date("2026-10-18"), prolongedAt: now, partners: { create: { partnerId: foxtrot.id } } } });
+    await prolongAssignedPromoPartners(promo.id, [{ promoPartnerId: "rel-rozetka", partnerId: rozetka.id }, { promoPartnerId: "rel-citrus", partnerId: citrus.id }], "2026-10-18", admin.id, now);
+    expect(await prisma.promo.count({ where: { lob: "AirPods", normalizedName: "october promo airpods 4 airpods 4 anc" } })).toBe(1);
+    expect((await prisma.promo.findUniqueOrThrow({ where: { id: target.id }, include: { partners: true } })).partners.map(({ partnerId }) => partnerId).sort()).toEqual([citrus.id, foxtrot.id, rozetka.id].sort());
+    expect(await prisma.promo.findUnique({ where: { id: promo.id } })).toBeNull();
+  });
+
+  it("makes concurrent identical selections idempotent with one target association", async () => {
+    const { promo, admin, rozetka } = await fixture();
+    const selection = [{ promoPartnerId: "rel-rozetka", partnerId: rozetka.id }];
+    const results = await Promise.all([
+      prolongAssignedPromoPartners(promo.id, selection, "2026-09-30", admin.id, now),
+      prolongAssignedPromoPartners(promo.id, selection, "2026-09-30", admin.id, now),
+    ]);
+    expect(results).toEqual([{ kind: "extended", refreshRequired: true }, { kind: "extended", refreshRequired: true }]);
+    expect(await prisma.promoPartner.count({ where: { partnerId: rozetka.id } })).toBe(1);
+    expect(await prisma.promo.count()).toBe(2);
+  });
+
+  it("reuses selected target associations and leaves unselected source partners untouched", async () => {
+    const { promo, admin, rozetka, comfy, allo } = await fixture();
+    const target = await prisma.promo.create({ data: { lob: promo.lob, name: "Existing target", normalizedName: promo.normalizedName, startDate: promo.startDate, endDate: date("2026-09-30"), prolongedAt: now, partners: { create: { partnerId: comfy.id } } } });
+    const result = await prolongAssignedPromoPartners(promo.id, [{ promoPartnerId: "rel-rozetka", partnerId: rozetka.id }, { promoPartnerId: "rel-comfy", partnerId: comfy.id }], "2026-09-30", admin.id, now);
+    expect(result).toMatchObject({ kind: "extended", refreshRequired: true });
+    expect(await prisma.promo.count()).toBe(2);
+    expect((await prisma.promo.findUniqueOrThrow({ where: { id: promo.id }, include: { partners: true } })).partners.map(({ partnerId }) => partnerId).sort()).toEqual(["m113-allo", "m113-citrus"]);
+    expect(await prisma.promoPartner.count({ where: { promoId: target.id } })).toBe(2);
+    expect(await prisma.promoPartner.count({ where: { promoId: target.id, partnerId: comfy.id } })).toBe(1);
+    expect(await prisma.promoPartner.count({ where: { promoId: target.id, partnerId: allo.id } })).toBe(0);
+  });
+
+  it("rejects frontend partner IDs that do not match their source relations", async () => {
+    const { promo, admin } = await fixture();
+    await expect(prolongAssignedPromoPartners(promo.id, [{ promoPartnerId: "rel-rozetka", partnerId: "m113-allo" }], "2026-09-30", admin.id, now)).rejects.toBeInstanceOf(ScopedProlongationConflictError);
+    expect(await prisma.promoPartner.count({ where: { promoId: promo.id } })).toBe(4);
+  });
+
+  it("returns a safe conflict for CLOSED target periods without changing partner associations", async () => {
+    const { promo, admin, kamA } = await fixture();
+    await prisma.reportingPeriod.create({ data: { year: 2026, quarter: 3, lob: promo.lob, status: "CLOSED", closedByUserId: admin.id, closedAt: now } });
+    const response = await api().post(`/api/promos/${promo.id}/prolong-partners`).set(auth(admin)).send({ promoPartnerSelections: [{ promoPartnerId: "rel-rozetka", partnerId: "m113-rozetka" }], endDate: "2026-09-30" });
+    expect(response.status).toBe(409); expect(response.body.error).toContain("період уже закрито");
+    expect(await prisma.promoPartner.count({ where: { promoId: promo.id } })).toBe(4);
+    expect(await prisma.promo.findUniqueOrThrow({ where: { id: promo.id } })).toMatchObject({ endDate: date("2026-09-28"), prolongedAt: null });
+    expect(kamA.role).toBe("KAM");
+  });
+
+  it("rolls back the whole selection when a later transaction step fails", async () => {
+    const { promo, admin, rozetka, comfy } = await fixture();
+    const target = await prisma.promo.create({ data: { lob: promo.lob, name: promo.name, normalizedName: promo.normalizedName, startDate: promo.startDate, endDate: date("2026-09-30") } });
+    const failAfterWork = async <T,>(work: (tx: Prisma.TransactionClient) => Promise<T>) => prisma.$transaction(async (tx) => { await work(tx); throw new Error("simulated transaction failure"); });
+    await expect(prolongAssignedPromoPartners(promo.id, [{ promoPartnerId: "rel-rozetka", partnerId: rozetka.id }, { promoPartnerId: "rel-comfy", partnerId: comfy.id }], "2026-09-30", admin.id, now, failAfterWork)).rejects.toThrow("simulated transaction failure");
+    expect(await prisma.promoPartner.count({ where: { promoId: promo.id } })).toBe(4);
+    expect(await prisma.promoPartner.count({ where: { promoId: target.id } })).toBe(0);
   });
 
   it("maps malformed, unavailable, stale and ended requests without leaking relation details", async () => {
@@ -305,13 +383,25 @@ describe("M11.3a scoped prolongation API", () => {
     expect((await endedApi.post(`/api/promos/${promo.id}/prolong-partners`).set(auth(kamA)).send({ promoPartnerIds: ["rel-comfy"], endDate: "2026-09-30" })).status).toBe(409);
   });
 
-  it("maps CLOSED and compatible-target partner conflicts to 409", async () => {
+  it("maps CLOSED periods to 409 and reuses compatible target partners", async () => {
     const first = await fixture();
     await prisma.reportingPeriod.create({ data: { year: 2026, quarter: 3, lob: first.promo.lob, status: "CLOSED", closedAt: now, closedByUserId: first.admin.id } });
     expect((await api().post(`/api/promos/${first.promo.id}/prolong-partners`).set(auth(first.kamA)).send({ promoPartnerIds: ["rel-rozetka"], endDate: "2026-09-30" })).status).toBe(409);
     await prisma.reportingPeriod.deleteMany(); await prisma.userPartner.deleteMany(); await prisma.user.deleteMany(); await prisma.promoPartner.deleteMany(); await prisma.promo.deleteMany(); await prisma.partner.deleteMany();
     const second = await fixture();
     await prisma.promo.create({ data: { lob: second.promo.lob, name: second.promo.name, normalizedName: second.promo.normalizedName, startDate: second.promo.startDate, endDate: date("2026-09-30"), partners: { create: { partnerId: second.rozetka.id } } } });
-    expect((await api().post(`/api/promos/${second.promo.id}/prolong-partners`).set(auth(second.kamA)).send({ promoPartnerIds: ["rel-rozetka"], endDate: "2026-09-30" })).status).toBe(409);
+    const reused = await api().post(`/api/promos/${second.promo.id}/prolong-partners`).set(auth(second.kamA)).send({ promoPartnerIds: ["rel-rozetka"], endDate: "2026-09-30" });
+    expect(reused.status).toBe(200);
+    expect(await prisma.promoPartner.count({ where: { partnerId: second.rozetka.id } })).toBe(1);
+  });
+
+  it("returns a safe conflict instead of a generic server error from the legacy whole-Promo endpoint", async () => {
+    const { promo, admin, comfy } = await fixture();
+    await prisma.promo.create({ data: { lob: promo.lob, name: promo.name, normalizedName: promo.normalizedName, startDate: promo.startDate, endDate: date("2026-09-30"), partners: { create: { partnerId: comfy.id } } } });
+    const response = await api().post(`/api/promos/${promo.id}/prolong`).set(auth(admin)).send({ endDate: "2026-09-30" });
+    expect(response.status).toBe(409);
+    expect(response.body.error).toContain("Промо з таким періодом уже існує");
+    expect(JSON.stringify(response.body)).not.toContain("P2002");
+    expect(await prisma.promo.findUniqueOrThrow({ where: { id: promo.id } })).toMatchObject({ endDate: date("2026-09-28"), prolongedAt: null });
   });
 });

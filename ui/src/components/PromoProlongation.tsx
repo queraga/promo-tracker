@@ -31,7 +31,9 @@ export function prolongationErrorMessage(reason: unknown) {
   if (reason.status === 400) return "Оберіть пізнішу дату в межах поточного або наступного кварталу.";
   if (reason.status === 403) return "У вас немає прав на пролонгацію промо.";
   if (reason.status === 404) return "Промо більше недоступне. Оновіть робочий простір.";
-  if (reason.status === 409) return "Пролонгація неможлива: поточний або наступний квартал уже закрито.";
+  if (reason.status === 409 && reason.message.startsWith("Звітний період уже закрито")) return reason.message;
+  if (reason.status === 409 && reason.message.startsWith("Промо з таким періодом уже існує")) return "Промо з таким періодом уже є. Оновіть робочий простір і виберіть партнерів для пролонгації.";
+  if (reason.status === 409) return "Дані промо змінилися. Оновіть робочий простір і повторіть спробу.";
   return "Не вдалося виконати пролонгацію. Спробуйте ще раз.";
 }
 
@@ -40,7 +42,8 @@ export function scopedProlongationErrorMessage(reason: unknown) {
   if (reason.status === 400) return "Перевірте нову дату завершення та вибраних партнерів.";
   if (reason.status === 403) return "У вас немає доступу до цієї дії.";
   if (reason.status === 404) return "Промо більше недоступне. Оновіть робочий простір.";
-  if (reason.status === 409) return "Дані промо змінилися або період недоступний. Оновіть робочий простір.";
+  if (reason.status === 409 && reason.message.startsWith("Звітний період уже закрито")) return reason.message;
+  if (reason.status === 409) return "Дані промо або партнерів змінилися. Оновіть робочий простір.";
   return "Не вдалося виконати пролонгацію. Спробуйте ще раз.";
 }
 
@@ -80,9 +83,10 @@ export function ProlongationDialog({ promo, endDate, submitting, error, onEndDat
 type ScopedProps = Props & { selectedPromoPartnerIds: string[]; onTogglePartner: (id: string) => void; onToggleAll: () => void };
 export function ScopedProlongationDialog({ promo, endDate, submitting, error, selectedPromoPartnerIds, onEndDateChange, onTogglePartner, onToggleAll, onCancel, onConfirm }: ScopedProps) {
   const preview = getProlongationPreview(promo, endDate); const invalid = !preview; const allSelected = selectedPromoPartnerIds.length === promo.partners.length;
+  const selectedNames = promo.partners.filter(({ promoPartnerId }) => selectedPromoPartnerIds.includes(promoPartnerId)).map(({ partnerName }) => partnerName);
   return <div className="partner-dialog-backdrop" role="presentation"><div className="partner-dialog prolongation-dialog scoped-prolongation-dialog" role="dialog" aria-modal="true" aria-labelledby="scoped-prolongation-title">
     <h3 id="scoped-prolongation-title">Пролонгація промо</h3><strong className="prolongation-name">{promo.name}</strong>
-    <section className="scoped-partners"><div><span>Ваші партнери</span><button type="button" disabled={submitting} onClick={onToggleAll}>{allSelected ? "Зняти вибір" : "Обрати всі"}</button></div><div className="partner-dialog-options">{promo.partners.map((partner) => <label key={partner.promoPartnerId}><input type="checkbox" value={partner.promoPartnerId} checked={selectedPromoPartnerIds.includes(partner.promoPartnerId)} disabled={submitting} onChange={() => onTogglePartner(partner.promoPartnerId)} /><span>{partner.partnerName}</span></label>)}</div></section>
+    <section className="scoped-partners"><div><span>Партнери промо</span><button type="button" disabled={submitting} onClick={onToggleAll}>{allSelected ? "Зняти вибір" : "Обрати всі"}</button></div><div className="partner-dialog-options">{promo.partners.map((partner) => <label key={partner.promoPartnerId}><input type="checkbox" value={partner.promoPartnerId} checked={selectedPromoPartnerIds.includes(partner.promoPartnerId)} disabled={submitting} onChange={() => onTogglePartner(partner.promoPartnerId)} /><span>{partner.partnerName}</span></label>)}</div><p className="selected-prolongation-partners">Обрано: {selectedNames.length ? selectedNames.join(", ") : "нікого"}</p></section>
     <dl className="prolongation-current"><dt>Поточний період</dt><dd>{displayDate(promo.startDate)} – {displayDate(promo.endDate)}</dd></dl>
     <label className="prolongation-date"><span>Нова дата завершення</span><input type="date" min={isoDate(new Date(parseDate(promo.endDate).getTime() + 86400000))} value={endDate} disabled={submitting} onChange={(event) => onEndDateChange(event.target.value)} /></label>
     {endDate && invalid && <p className="prolongation-error" role="alert">Оберіть пізнішу дату в межах поточного або наступного кварталу.</p>}

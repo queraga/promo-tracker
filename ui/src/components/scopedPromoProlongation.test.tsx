@@ -37,7 +37,7 @@ describe("M11.3b KAM scoped prolongation UI", () => {
 
   it("renders human-readable own partners and complete confirmation context", () => {
     const html = scopedDialog(["rel-rozetka", "rel-comfy"]);
-    expect(html).toContain("Ваші партнери"); expect(html).not.toContain("Усі партнери");
+    expect(html).toContain("Партнери промо"); expect(html).not.toContain("Усі партнери"); expect(html).toContain("Обрано: Rozetka, Comfy");
     expect(html).toContain("Rozetka"); expect(html).toContain("Comfy"); expect(html).toContain("September Promo");
     expect(html).toContain("03.09.2026"); expect(html).toContain("28.09.2026"); expect(html).toContain("12.10.2026");
   });
@@ -62,11 +62,11 @@ describe("M11.3b KAM scoped prolongation UI", () => {
     expect(isKamProlongationEligible(activePromo(), new Date("2026-09-29T00:00:00Z"))).toBe(false);
   });
 
-  it("posts only selected promoPartnerIds to the scoped endpoint", async () => {
+  it("posts selected promoPartner relation IDs with partner IDs for server-side verification", async () => {
     const result = { kind: "split" as const, refreshRequired: true as const };
     const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => result }); vi.stubGlobal("fetch", fetch);
-    await expect(prolongAssignedPromoPartners("promo-1", ["rel-comfy"], "2026-10-12")).resolves.toEqual(result);
-    expect(fetch).toHaveBeenCalledWith("/api/promos/promo-1/prolong-partners", expect.objectContaining({ method: "POST", body: JSON.stringify({ promoPartnerIds: ["rel-comfy"], endDate: "2026-10-12" }) }));
+    await expect(prolongAssignedPromoPartners("promo-1", [{ promoPartnerId: "rel-comfy", partnerId: "comfy" }], "2026-10-12")).resolves.toEqual(result);
+    expect(fetch).toHaveBeenCalledWith("/api/promos/promo-1/prolong-partners", expect.objectContaining({ method: "POST", body: JSON.stringify({ promoPartnerSelections: [{ promoPartnerId: "rel-comfy", partnerId: "comfy" }], endDate: "2026-10-12" }) }));
   });
 
   it("closes and reloads the scoped workspace instead of patching mutation data", async () => {
@@ -77,6 +77,7 @@ describe("M11.3b KAM scoped prolongation UI", () => {
   });
 
   it.each([[400, "Перевірте"], [403, "немає доступу"], [404, "більше недоступне"], [409, "Оновіть робочий простір"]])("maps scoped backend %s to safe Ukrainian UX", (status, message) => expect(scopedProlongationErrorMessage(new ApiError(status as number, "hidden internals"))).toContain(message));
+  it("shows the specific closed-period message returned by the API", () => expect(scopedProlongationErrorMessage(new ApiError(409, "Звітний період уже закрито. Пролонгація недоступна."))).toContain("період уже закрито"));
 
   it("locks partner/date/actions while a scoped request is pending", () => {
     const html = scopedDialog(["rel-rozetka"], "2026-09-30", true);
